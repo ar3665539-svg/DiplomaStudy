@@ -1,0 +1,62 @@
+/* DiplomaStudy - Responsive Design System */
+
+@media (max-width: 380px) {
+  :root {
+    --container-padding: 12px;
+  }
+
+  .quick-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .quick-action-btn {
+    font-size: 10px;
+    padding: 8px 2px;
+  }
+
+  .quick-action-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+
+  .hero-banner {
+    padding: 16px;
+  }
+}
+
+@media (min-width: 681px) {
+  body {
+    background-color: #E8EFE8;
+  }
+
+  [data-theme="dark"] body {
+    background-color: #0A100C;
+  }
+
+  #app {
+    border-left: 1px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
+  }
+}
+
+/* Print Friendly */
+@media print {
+  .app-header,
+  .app-bottom-nav,
+  .search-container,
+  .filter-tabs-scroll,
+  .header-actions {
+    display: none !important;
+  }
+
+  #app {
+    box-shadow: none;
+    max-width: 100%;
+  }
+
+  .app-main {
+    padding: 0;
+  }
+}

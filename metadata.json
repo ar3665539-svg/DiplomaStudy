@@ -1,0 +1,6 @@
+{
+  "name": "DiplomaStudy",
+  "description": "Learn Smart. Prepare Better. Build Your Future. Mobile-first study and exam preparation app for Diploma-in-Engineering students in Bangladesh.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
