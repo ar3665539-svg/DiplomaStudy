@@ -1,206 +1,300 @@
 /**
- * DiplomaStudy - Home Page View
+ * DiplomaStudy - Home Page
+ * আগের সব design + নতুন Department Dropdown
  */
 
 import { AppShell } from "../components/AppShell.js";
-import { state } from "../core/state.js";
-import { router } from "../core/router.js";
+import { DepartmentDropdown } from "../components/DepartmentDropdown.js";
 import { getDepartmentById } from "../../data/departments.js";
-import { getSemesterById } from "../../data/semesters.js";
-import { getSubjectsByDeptAndSemester } from "../../data/subjects.js";
-import { getDailyQuiz } from "../../data/quizzes.js";
-import { notices } from "../../data/notices.js";
-import { suggestions } from "../../data/suggestions.js";
-import { progressService } from "../features/progress/progressService.js";
-import { ProgressCard } from "../components/ProgressCard.js";
-import { SubjectCard } from "../components/SubjectCard.js";
-import { QuizCard } from "../components/QuizCard.js";
+import { civilSubjects } from "../../data/civilSubjects.js";
+import { comingSoonFeatures } from "../../data/comingSoonFeatures.js";
+import { router } from "../core/router.js";
+import { showComingSoon } from "../core/comingSoonHelper.js";
+import { storage, STORAGE_KEYS } from "../core/storage.js";
 
 export function renderHome() {
-  AppShell.updateHeader({
-    showBack: false,
-    showSearch: true,
-    showTheme: true
-  });
+  AppShell.updateHeader({ showBack: false });
 
   const main = AppShell.getMainView();
   if (!main) return;
 
-  const currentDept = getDepartmentById(state.selectedDepartment);
-  const currentSem = getSemesterById(state.selectedSemester);
-  const user = state.userPreferences;
-  const progressData = progressService.getSummary();
-  const deptSubjects = getSubjectsByDeptAndSemester(state.selectedDepartment, state.selectedSemester);
-  const dailyQuiz = getDailyQuiz();
-  const latestNotice = notices[0];
-  const featuredSuggestion = suggestions[0];
+  // User info
+  const settings = storage.get(STORAGE_KEYS.SETTINGS, {});
+  const userName = settings.userName || "Student";
+  const currentDeptId = settings.department || "civil";
+  const currentDept = getDepartmentById(currentDeptId);
+
+  // Greeting
+  const hour = new Date().getHours();
+  let greeting = "শুভ সকাল";
+  let greetingEmoji = "🌅";
+  if (hour >= 12 && hour < 17) { greeting = "শুভ দুপুর"; greetingEmoji = "☀️"; }
+  else if (hour >= 17 && hour < 20) { greeting = "শুভ সন্ধ্যা"; greetingEmoji = "🌆"; }
+  else if (hour >= 20 || hour < 5) { greeting = "শুভ রাত্রি"; greetingEmoji = "🌙"; }
+
+  // Tips
+  const tips = [
+    { bn: "প্রতিদিন ৩০ মিনিট পড়ুন — ধারাবাহিকতাই আসল শক্তি।" },
+    { bn: "নতুন টপিকের আগে আগেরগুলো রিভিশন দিন।" },
+    { bn: "বোর্ড প্রশ্ন সমাধান করলে প্যাটার্ন বুঝবেন।" },
+    { bn: "প্রতি ২৫ মিনিটে ছোট বিরতি নিন।" },
+    { bn: "সূত্র ৩ বার লিখলে মুখস্থ হয়ে যাবে।" }
+  ];
+  const todayTip = tips[new Date().getDate() % tips.length];
 
   main.innerHTML = `
-    <!-- Greeting & Current Study Banner -->
-    <div class="hero-banner animate-fade-in">
-      <div class="flex items-center justify-between mb-xs">
-        <span class="text-xs font-semibold" style="opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px;">Welcome back 👋</span>
-        <span class="badge" style="background-color: rgba(255, 255, 255, 0.2); color: #FFFFFF; font-size: 10px;">
-          ${progressData.streak} Day Streak 🔥
-        </span>
-      </div>
-      <h2 class="text-xl font-bold mb-xs" style="color: #FFFFFF;">${user.name}</h2>
+    <!-- ═══════════════════════════════════
+         HERO BANNER
+         ═══════════════════════════════════ -->
+    <div class="home-hero">
+      <div class="home-hero-bg-pattern"></div>
       
-      <!-- Current Study Tag -->
-      <div class="flex items-center gap-xs flex-wrap mt-sm">
-        <button class="badge" id="btn-change-dept" style="background-color: #FFFFFF; color: var(--color-forest); font-weight: 700; cursor: pointer; padding: 5px 10px;">
-          ${currentDept.icon} ${currentDept.shortName}
+      <div class="home-hero-content">
+        <div class="home-greeting">
+          <span class="home-greeting-emoji">${greetingEmoji}</span>
+          <span class="home-greeting-text">${greeting}, ${userName}!</span>
+        </div>
+        
+        <div class="home-hero-title-box">
+          <div class="home-hero-icon">${currentDept.icon}</div>
+          <div>
+            <h1 class="home-hero-title">${currentDept.name}</h1>
+            <p class="home-hero-subtitle">Diploma in Engineering</p>
+          </div>
+        </div>
+        
+        <div class="home-hero-stats">
+          <div class="hero-stat">
+            <span class="hero-stat-value">${civilSubjects.length}</span>
+            <span class="hero-stat-label">Subjects</span>
+          </div>
+          <div class="hero-stat-divider"></div>
+          <div class="hero-stat">
+            <span class="hero-stat-value">BTEB</span>
+            <span class="hero-stat-label">Curriculum</span>
+          </div>
+          <div class="hero-stat-divider"></div>
+          <div class="hero-stat">
+            <span class="hero-stat-value">2026</span>
+            <span class="hero-stat-label">Session</span>
+          </div>
+        </div>
+        
+        <button class="hero-cta-btn" id="hero-continue-btn">
+          <span>📖 শেখা শুরু করুন</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
         </button>
-        <button class="badge" id="btn-change-sem" style="background-color: rgba(255, 255, 255, 0.25); color: #FFFFFF; font-weight: 600; cursor: pointer; padding: 5px 10px;">
-          ${currentSem.name} ▾
-        </button>
       </div>
+    </div>
 
-      <!-- Today's Goal -->
-      <div class="mt-md pt-sm" style="border-top: 1px solid rgba(255, 255, 255, 0.2);">
-        <div class="flex items-center justify-between text-xs mb-xs" style="opacity: 0.9;">
-          <span>Today's Study Goal</span>
-          <span>${user.dailyGoalMinutes} mins target</span>
+    <!-- ═══════════════════════════════════
+         🆕 DEPARTMENT DROPDOWN (নতুন)
+         ═══════════════════════════════════ -->
+    <div id="dept-dropdown-slot"></div>
+
+    <!-- ═══════════════════════════════════
+         DAILY TIP CARD
+         ═══════════════════════════════════ -->
+    <div class="daily-tip-card">
+      <div class="tip-icon-box">💡</div>
+      <div class="tip-content">
+        <span class="tip-label">আজকের টিপস</span>
+        <p class="tip-text">${todayTip.bn}</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════
+         SUBJECTS SECTION
+         ═══════════════════════════════════ -->
+    <div class="home-section-header">
+      <div class="home-section-title-box">
+        <span class="home-section-icon">📚</span>
+        <h2 class="home-section-title">Your Subjects</h2>
+      </div>
+      <span class="home-section-count">${civilSubjects.length}টি বিষয়</span>
+    </div>
+
+    <div class="subject-cards-grid" id="home-subject-grid">
+      ${civilSubjects.map((sub, idx) => `
+        <div 
+          class="subject-card-pro" 
+          data-subject-id="${sub.id}"
+          role="button"
+          tabindex="0"
+          aria-label="${sub.name}"
+        >
+          <div class="subj-pro-glow"></div>
+          <div class="subj-pro-header">
+            <div class="subj-pro-icon">${sub.icon}</div>
+            <span class="subj-pro-code">${sub.code}</span>
+          </div>
+          
+          <div class="subj-pro-body">
+            <h3 class="subj-pro-name">${sub.name}</h3>
+            <p class="subj-pro-bangla">${sub.banglaName}</p>
+          </div>
+          
+          <div class="subj-pro-footer">
+            <div class="subj-pro-badges">
+              <span class="pro-badge">${sub.type}</span>
+              <span class="pro-badge pro-badge-credits">${sub.credits} cr</span>
+            </div>
+            <div class="subj-pro-arrow">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </div>
+          </div>
+          
+          <div class="subj-pro-tap-hint">ট্যাপ করুন</div>
         </div>
-        <div class="progress-bar-track" style="background-color: rgba(255, 255, 255, 0.25);">
-          <div class="progress-bar-fill" style="width: 65%; background: #A8BFA8;"></div>
+      `).join("")}
+    </div>
+
+    <!-- ═══════════════════════════════════
+         QUICK ACCESS
+         ═══════════════════════════════════ -->
+    <div class="home-section-header">
+      <div class="home-section-title-box">
+        <span class="home-section-icon">⚡</span>
+        <h2 class="home-section-title">Quick Access</h2>
+      </div>
+    </div>
+
+    <div class="quick-access-grid">
+      ${[
+        { icon: "📝", label: "Notes", bangla: "নোটস" },
+        { icon: "⭐", label: "Saved", bangla: "সেভড" },
+        { icon: "🎯", label: "Quiz", bangla: "কুইজ" },
+        { icon: "📄", label: "PDFs", bangla: "পিডিএফ" },
+        { icon: "🤖", label: "AI Tutor", bangla: "এআই" },
+        { icon: "📊", label: "Progress", bangla: "অগ্রগতি" }
+      ].map((item) => `
+        <div 
+          class="quick-access-card" 
+          data-coming-soon="${item.label} (${item.bangla})"
+          role="button"
+          tabindex="0"
+        >
+          <div class="qa-icon">${item.icon}</div>
+          <span class="qa-label">${item.label}</span>
+          <span class="qa-bangla">${item.bangla}</span>
+          <span class="qa-lock">🔒</span>
         </div>
+      `).join("")}
+    </div>
+
+    <!-- ═══════════════════════════════════
+         COMING SOON SECTION
+         ═══════════════════════════════════ -->
+    <div class="home-section-header">
+      <div class="home-section-title-box">
+        <span class="home-section-icon">🔒</span>
+        <h2 class="home-section-title">Coming Soon</h2>
       </div>
+      <span class="home-section-count">শীঘ্রই আসছে</span>
     </div>
 
-    <!-- Quick Actions Grid (10 Requested Icons) -->
-    <div class="section-header" style="margin-top: 10px;">
-      <h3 class="section-title">Quick Actions</h3>
-      <a href="#/departments" class="section-action">All Subjects →</a>
-    </div>
-
-    <div class="quick-grid">
-      <a href="#/departments" class="quick-action-btn">
-        <div class="quick-action-icon" style="background-color: var(--color-forest-soft); color: var(--color-forest);">📚</div>
-        <span>Study</span>
-      </a>
-      <a href="#/quiz" class="quick-action-btn">
-        <div class="quick-action-icon" style="background-color: var(--color-accent-light); color: var(--color-accent);">🎯</div>
-        <span>Quiz</span>
-      </a>
-      <a href="#/notes" class="quick-action-btn">
-        <div class="quick-action-icon" style="background-color: var(--color-sage-light); color: var(--color-sage-dark);">📝</div>
-        <span>Notes</span>
-      </a>
-      <a href="#/bookmarks" class="quick-action-btn">
-        <div class="quick-action-icon" style="background-color: #FCE7F3; color: #DB2777;">⭐</div>
-        <span>Saved</span>
-      </a>
-      <a href="#/pdfs" class="quick-action-btn">
-        <div class="quick-action-icon" style="background-color: var(--color-danger-bg); color: var(--color-danger);">📄</div>
-        <span>PDFs</span>
-      </a>
-      <a href="#/planner" class="quick-action-btn">
-        <div class="quick-action-icon" style="background-color: #EDE9FE; color: #7C3AED;">📅</div>
-        <span>Planner</span>
-      </a>
-      <a href="#/timer" class="quick-action-btn">
-        <div class="quick-action-icon" style="background-color: #FEF3C7; color: #D97706;">⏱️</div>
-        <span>Timer</span>
-      </a>
-      <a href="#/formula" class="quick-action-btn">
-        <div class="quick-action-icon" style="background-color: #E0E7FF; color: #4338CA;">📐</div>
-        <span>Formula</span>
-      </a>
-      <a href="#/tools" class="quick-action-btn">
-        <div class="quick-action-icon" style="background-color: #CCFBF1; color: #0F766E;">🧮</div>
-        <span>Tools</span>
-      </a>
-      <a href="#/ai" class="quick-action-btn">
-        <div class="quick-action-icon" style="background-color: #CFFAFE; color: #0891B2;">🤖</div>
-        <span>AI Tutor</span>
-      </a>
-    </div>
-
-    <!-- Continue Learning Section -->
-    <div class="section-header">
-      <h3 class="section-title">Continue Learning</h3>
-      <a href="#/subjects" class="section-action">View All (${deptSubjects.length})</a>
-    </div>
-    <div id="continue-learning-slot">
-      ${deptSubjects.length > 0 ? SubjectCard.render(deptSubjects[0]) : `<p class="text-xs text-muted">No subjects found for this semester.</p>`}
-    </div>
-
-    <!-- Today's Quiz / Daily Challenge -->
-    <div class="section-header">
-      <h3 class="section-title">Today's Quiz Challenge</h3>
-      <span class="badge badge-accent">Daily Set</span>
-    </div>
-    <div id="daily-quiz-slot">
-      ${QuizCard.render(dailyQuiz)}
-    </div>
-
-    <!-- Progress Overview Component -->
-    ${ProgressCard.render(progressData)}
-
-    <!-- Smart Revision (Revise Today) -->
-    <div class="section-header">
-      <h3 class="section-title">Smart Revision</h3>
-      <span class="badge badge-forest">Revise Today</span>
-    </div>
-    <div class="card mb-md card-highlight" style="border-left: 4px solid var(--color-forest);">
-      <div class="flex items-center justify-between mb-xs">
-        <span class="badge badge-danger">High Exam Priority</span>
-        <span class="text-xs text-dim">Cramer's Rule & Ohm's Law</span>
-      </div>
-      <h4 class="text-sm font-bold text-forest mb-xs">${featuredSuggestion.title}</h4>
-      <p class="text-xs text-muted mb-sm">${featuredSuggestion.summary}</p>
-      <div class="flex items-center gap-xs">
-        <a href="#/questions?subjectId=${featuredSuggestion.subjectId}&chapterId=${featuredSuggestion.chapterId}" class="btn btn-primary btn-sm flex-1">
-          <span>Practice Now</span>
-        </a>
-        <a href="#/suggestions" class="btn btn-secondary btn-sm">
-          <span>All Suggestions</span>
-        </a>
-      </div>
-    </div>
-
-    <!-- Recent Subjects List -->
-    <div class="section-header">
-      <h3 class="section-title">Semester Subjects</h3>
-      <a href="#/subjects" class="section-action">Explore All</a>
-    </div>
-    <div id="recent-subjects-list">
-      ${deptSubjects.slice(1, 3).map((s) => SubjectCard.render(s)).join("")}
-    </div>
-
-    <!-- Latest Notice Card -->
-    ${latestNotice ? `
-      <div class="section-header">
-        <h3 class="section-title">Latest Notice</h3>
-        <a href="#/notices" class="section-action">All Notices</a>
-      </div>
-      <div class="card mb-md" style="border-left: 3px solid var(--color-accent);">
-        <div class="flex items-center justify-between mb-xs">
-          <span class="badge badge-accent">${latestNotice.category}</span>
-          <span class="text-xs text-dim">${latestNotice.date}</span>
+    <div class="coming-soon-list">
+      ${comingSoonFeatures.filter(f => ["planner", "jobs", "notices", "tools"].includes(f.id)).map((f) => `
+        <div 
+          class="cs-list-card" 
+          data-coming-soon="${f.title} (${f.banglaTitle})"
+          role="button"
+          tabindex="0"
+        >
+          <div class="cs-list-icon">${f.icon}</div>
+          <div class="cs-list-body">
+            <h4 class="cs-list-title">${f.title}</h4>
+            <p class="cs-list-bangla">${f.banglaTitle}</p>
+          </div>
+          <span class="cs-list-lock">🔒</span>
         </div>
-        <h4 class="text-sm font-bold text-text mb-xs">${latestNotice.title}</h4>
-        <p class="text-xs text-muted mb-sm clamp-2">${latestNotice.description}</p>
-        <a href="#/notices" class="text-xs font-bold text-forest">Read full notice →</a>
+      `).join("")}
+      
+      <div class="view-all-card" id="home-view-all-features">
+        <span>সব Feature দেখুন</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
       </div>
-    ` : ""}
+    </div>
+
+    <!-- ═══════════════════════════════════
+         INFO BANNER
+         ═══════════════════════════════════ -->
+    <div class="home-info-banner">
+      <div class="hib-icon">🚀</div>
+      <div class="hib-body">
+        <h4 class="hib-title">Content Coming Soon</h4>
+        <p class="hib-text">সব বিষয়ের chapter, প্রশ্ন, সাজেশন ও PDF server থেকে যুক্ত করা হবে।</p>
+      </div>
+    </div>
+
+    <div style="height: 20px;"></div>
   `;
 
-  // Bind Events
-  main.querySelector("#btn-change-dept")?.addEventListener("click", () => {
-    router.navigate("#/departments");
+  // ═══════════════════════════════════════════
+  // RENDER DEPARTMENT DROPDOWN
+  // ═══════════════════════════════════════════
+  const dropdownSlot = main.querySelector("#dept-dropdown-slot");
+  if (dropdownSlot) {
+    dropdownSlot.innerHTML = DepartmentDropdown.render(currentDeptId);
+    DepartmentDropdown.bindEvents(dropdownSlot, (deptId) => {
+      const dept = getDepartmentById(deptId);
+      if (!dept) return;
+
+      const newSettings = storage.get(STORAGE_KEYS.SETTINGS, {});
+      newSettings.department = deptId;
+      storage.set(STORAGE_KEYS.SETTINGS, newSettings);
+
+      if (dept.hasPdf) {
+        router.navigate(`#/dept-pdf?deptId=${deptId}`);
+      } else {
+        showComingSoon(`${dept.banglaName} এর PDF`);
+      }
+    });
+  }
+
+  // Hero CTA
+  main.querySelector("#hero-continue-btn")?.addEventListener("click", () => {
+    router.navigate("#/subjects");
   });
 
-  main.querySelector("#btn-change-sem")?.addEventListener("click", () => {
-    router.navigate("#/semesters");
+  // Subject cards
+  main.querySelectorAll(".subject-card-pro").forEach((card) => {
+    const navigate = () => {
+      const id = card.getAttribute("data-subject-id");
+      if (id) router.navigate(`#/subject?subjectId=${id}`);
+    };
+    card.addEventListener("click", navigate);
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        navigate();
+      }
+    });
   });
 
-  SubjectCard.bindClick(main, (subjectId) => {
-    router.navigate(`#/chapters?subjectId=${subjectId}`);
+  // Coming soon cards
+  main.querySelectorAll("[data-coming-soon]").forEach((card) => {
+    const handle = () => {
+      const name = card.getAttribute("data-coming-soon");
+      showComingSoon(name);
+    };
+    card.addEventListener("click", handle);
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handle();
+      }
+    });
   });
 
-  QuizCard.bindEvents(main, (quizId) => {
-    router.navigate(`#/quiz?quizId=${quizId}`);
+  // View all features
+  main.querySelector("#home-view-all-features")?.addEventListener("click", () => {
+    router.navigate("#/more");
   });
 }

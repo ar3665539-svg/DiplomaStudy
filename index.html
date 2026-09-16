@@ -1,44 +1,121 @@
 <!doctype html>
-<html lang="en">
+<html lang="bn">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>DiplomaStudy</title>
-    <meta name="description" content="Learn Smart. Prepare Better. Build Your Future. Mobile-first study and exam preparation app for Diploma-in-Engineering students in Bangladesh." />
     
-    <!-- Open Graph & Social Meta -->
-    <meta property="og:title" content="DiplomaStudy" />
-    <meta property="og:description" content="Learn Smart. Prepare Better. Build Your Future. Mobile-first study and exam preparation app for Diploma-in-Engineering students in Bangladesh." />
+    <title>DiplomaStudy — Civil 1st Semester</title>
+    
+    <meta name="description" content="DiplomaStudy - Civil Engineering 1st Semester study app for Diploma-in-Engineering students in Bangladesh. Learn Smart. Prepare Better." />
+    <meta name="author" content="DiplomaStudy" />
+    <meta name="keywords" content="Diploma, Civil Engineering, BTEB, 1st Semester, Bangladesh, Polytechnic" />
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="DiplomaStudy — Civil 1st Semester" />
+    <meta property="og:description" content="Civil Engineering 1st Semester study app for Diploma students in Bangladesh." />
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="bn_BD" />
+    
+    <!-- Theme Color -->
     <meta name="theme-color" content="#1C3E2C" />
     
-    <!-- Mobile & PWA meta -->
+    <!-- Mobile & PWA -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="DiplomaStudy" />
+    <meta name="format-detection" content="telephone=no" />
+    
+    <!-- PWA Manifest -->
     <link rel="manifest" href="./manifest.json" />
+    
+    <!-- Icons -->
     <link rel="icon" type="image/svg+xml" href="./assets/icons/icon.svg" />
     <link rel="apple-touch-icon" href="./assets/icons/icon-192.png" />
-
-    <!-- Pure CSS Foundation (No Frameworks, No Build Tools) -->
+    
+    <!-- ═══════════════════════════════════════
+         STYLESHEETS (order important)
+         ═══════════════════════════════════════ -->
     <link rel="stylesheet" href="./css/variables.css" />
     <link rel="stylesheet" href="./css/reset.css" />
     <link rel="stylesheet" href="./css/global.css" />
     <link rel="stylesheet" href="./css/layout.css" />
     <link rel="stylesheet" href="./css/components.css" />
+    <link rel="stylesheet" href="./css/civil.css" />
     <link rel="stylesheet" href="./css/responsive.css" />
   </head>
+  
   <body>
-    <!-- Single Page Application Mount Point -->
+    <!-- App Mount Point -->
     <div id="app">
-      <div class="flex items-center justify-center p-xl" style="min-height: 80vh;">
+      <div class="initial-loader">
+        <div class="initial-loader-logo">DS</div>
         <div class="spinner"></div>
+        <p class="initial-loader-text">DiplomaStudy</p>
+        <p class="initial-loader-sub">Civil • 1st Semester</p>
       </div>
     </div>
+    
+    <!-- Toast Container -->
     <div id="toast-container"></div>
-
-    <!-- Main ES Module Entry Point -->
+    
+    <!-- Main Entry Point -->
     <script type="module" src="./js/main.js"></script>
+    
+    <!-- Inline styles for initial loader (before CSS loads) -->
+    <style>
+      .initial-loader {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 80vh;
+        padding: 40px 20px;
+        text-align: center;
+      }
+      
+      .initial-loader-logo {
+        width: 60px;
+        height: 60px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #1C3E2C, #587858);
+        color: #FFFFFF;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 22px;
+        letter-spacing: -0.5px;
+        margin-bottom: 20px;
+        box-shadow: 0 8px 20px rgba(28, 62, 44, 0.2);
+      }
+      
+      .initial-loader-text {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1C3E2C;
+        margin-top: 16px;
+        margin-bottom: 4px;
+      }
+      
+      .initial-loader-sub {
+        font-size: 12px;
+        color: #84968B;
+        font-weight: 500;
+      }
+      
+      .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid #E1E8E1;
+        border-top-color: #1C3E2C;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
   </body>
 </html>

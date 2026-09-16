@@ -1,83 +1,73 @@
 /**
- * DiplomaStudy - Subjects Page View
+ * DiplomaStudy - Subjects List Page
+ * Civil 1st Semester এর ৮টি বিষয়
  */
 
 import { AppShell } from "../components/AppShell.js";
-import { getDepartmentById } from "../../data/departments.js";
-import { getSemesterById } from "../../data/semesters.js";
-import { getSubjectsByDeptAndSemester } from "../../data/subjects.js";
-import { state } from "../core/state.js";
+import { CIVIL_DEPARTMENT, civilSubjects } from "../../data/civilSubjects.js";
 import { router } from "../core/router.js";
-import { SubjectCard } from "../components/SubjectCard.js";
-import { SearchBar } from "../components/SearchBar.js";
 
 export function renderSubjects() {
-  const currentDept = getDepartmentById(state.selectedDepartment);
-  const currentSem = getSemesterById(state.selectedSemester);
-  const allSubjects = getSubjectsByDeptAndSemester(state.selectedDepartment, state.selectedSemester);
-
   AppShell.updateHeader({
-    title: `${currentSem.name} Subjects`,
-    subtitle: `${currentDept.shortName} Technology`,
-    showBack: true,
-    showSearch: true
+    title: "Subjects",
+    subtitle: `${CIVIL_DEPARTMENT.name} • ${CIVIL_DEPARTMENT.semesterName}`,
+    showBack: true
   });
 
   const main = AppShell.getMainView();
   if (!main) return;
 
   main.innerHTML = `
-    <!-- Top Filter & Search Bar -->
-    <div class="mb-sm">
-      ${SearchBar.render({ placeholder: "Filter subjects by name or code...", id: "subject-filter-input" })}
+    <div class="page-intro">
+      <p class="page-intro-text">
+        নিচের যেকোনো বিষয়ে ট্যাপ করুন। প্রতিটি বিষয়ের chapter, প্রশ্ন ও সাজেশন server থেকে যুক্ত করা হবে।
+      </p>
     </div>
 
-    <!-- Quick Switcher Bar -->
-    <div class="flex items-center justify-between mb-md p-xs text-xs text-muted" style="border-bottom: 1px solid var(--color-border);">
-      <span>Showing <strong>${allSubjects.length}</strong> curriculum subjects</span>
-      <div class="flex items-center gap-xs">
-        <a href="#/departments" class="text-forest font-bold">Dept</a> •
-        <a href="#/semesters" class="text-forest font-bold">Semester</a>
-      </div>
-    </div>
-
-    <div id="subject-cards-container">
-      ${allSubjects.length > 0 ? (
-        allSubjects.map((s) => SubjectCard.render(s)).join("")
-      ) : `
-        <div class="empty-state">
-          <div class="empty-state-icon">📚</div>
-          <h2 class="empty-state-title">No Subjects Found</h2>
-          <p class="empty-state-desc">No subjects registered for this department and semester combination.</p>
-          <a href="#/departments" class="btn btn-primary btn-sm">Choose another department</a>
+    <div class="subject-list-full">
+      ${civilSubjects.map((sub, idx) => `
+        <div 
+          class="subject-card-full" 
+          data-subject-id="${sub.id}"
+          role="button"
+          tabindex="0"
+          aria-label="${sub.name}"
+        >
+          <div class="subj-left">
+            <div class="subj-number">${String(idx + 1).padStart(2, "0")}</div>
+            <div class="subj-icon">${sub.icon}</div>
+          </div>
+          <div class="subj-body">
+            <h3 class="subj-name">${sub.name}</h3>
+            <p class="subj-bangla">${sub.banglaName}</p>
+            <div class="subj-meta">
+              <span class="badge badge-forest">${sub.code}</span>
+              <span class="badge badge-sage">${sub.type}</span>
+              <span class="badge badge-accent">${sub.credits} Credits</span>
+            </div>
+            <p class="subj-desc">${sub.description}</p>
+          </div>
+          <div class="subj-arrow">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </div>
         </div>
-      `}
+      `).join("")}
     </div>
   `;
 
-  // Search filter
-  const container = main.querySelector("#subject-cards-container");
-  SearchBar.bindEvents(main, (q) => {
-    const query = q.toLowerCase().trim();
-    const filtered = allSubjects.filter((s) => 
-      s.name.toLowerCase().includes(query) || 
-      s.code.toLowerCase().includes(query) ||
-      s.description.toLowerCase().includes(query)
-    );
-
-    if (container) {
-      if (filtered.length === 0) {
-        container.innerHTML = `<div class="empty-state"><p class="empty-state-desc">No matching subjects found.</p></div>`;
-      } else {
-        container.innerHTML = filtered.map((s) => SubjectCard.render(s)).join("");
-        SubjectCard.bindClick(container, (subjectId) => {
-          router.navigate(`#/chapters?subjectId=${subjectId}`);
-        });
+  main.querySelectorAll(".subject-card-full").forEach((card) => {
+    const navigate = () => {
+      const id = card.getAttribute("data-subject-id");
+      if (id) router.navigate(`#/subject?subjectId=${id}`);
+    };
+    card.addEventListener("click", navigate);
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        navigate();
       }
-    }
-  }, "subject-filter-input");
-
-  SubjectCard.bindClick(main, (subjectId) => {
-    router.navigate(`#/chapters?subjectId=${subjectId}`);
+    });
   });
 }
