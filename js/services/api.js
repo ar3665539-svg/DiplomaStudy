@@ -2,6 +2,7 @@
  * DiplomaStudy User App - API Service
  * Supabase + localStorage cache
  * Field names normalized to camelCase
+ * Chapters sorted by sort_order (server-side)
  */
 
 import { supabase } from '../core/supabase.js';
@@ -55,6 +56,7 @@ function normalizeChapter(c) {
     id: c.id,
     subjectId: c.subject_id || c.subjectId,
     number: c.number,
+    sortOrder: c.sort_order || c.sortOrder || 0,
     name: c.name,
     nameEn: c.name_en || c.nameEn || '',
     icon: c.icon || '📖'
@@ -108,21 +110,15 @@ function normalizeFormula(f) {
   };
 }
 
-// ═══════════════════════════════════════════
-// PDF NORMALIZER — file_path = source of truth
-// ═══════════════════════════════════════════
 function normalizePdf(p) {
   if (!p) return null;
   
   let publicUrl = null;
   
-  // Priority 1: file_path → generate URL dynamically
   if (p.file_path && p.file_path.trim() !== '') {
     const { data } = supabase.storage.from('pdfs').getPublicUrl(p.file_path);
     publicUrl = data?.publicUrl || null;
-  }
-  // Fallback: file_url (legacy records only)
-  else if (p.file_url) {
+  } else if (p.file_url) {
     publicUrl = p.file_url;
   }
   
@@ -183,7 +179,7 @@ export async function getSubjectById(id) {
 }
 
 // ═══════════════════════════════════════════
-// CHAPTERS
+// CHAPTERS — ordered by sort_order (server)
 // ═══════════════════════════════════════════
 export async function getChaptersBySubject(subjectId) {
   try {
@@ -191,7 +187,7 @@ export async function getChaptersBySubject(subjectId) {
       .from('chapters')
       .select('*')
       .eq('subject_id', subjectId)
-      .order('number');
+      .order('sort_order', { ascending: true });
 
     if (error) throw error;
 
