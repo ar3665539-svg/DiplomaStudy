@@ -116,12 +116,12 @@ function normalizePdf(p) {
   
   let publicUrl = null;
   
-  // ⭐ Priority 1: file_path → generate URL dynamically
+  // Priority 1: file_path → generate URL dynamically
   if (p.file_path && p.file_path.trim() !== '') {
     const { data } = supabase.storage.from('pdfs').getPublicUrl(p.file_path);
     publicUrl = data?.publicUrl || null;
   }
-  // ⭐ Fallback: file_url (for legacy records only)
+  // Fallback: file_url (legacy records only)
   else if (p.file_url) {
     publicUrl = p.file_url;
   }
@@ -134,7 +134,7 @@ function normalizePdf(p) {
     fileName: p.file_name || '',
     fileSize: p.file_size || '',
     filePath: p.file_path || '',
-    fileUrl: publicUrl,           // ⭐ always computed from file_path
+    fileUrl: publicUrl,
     createdAt: p.created_at || p.createdAt
   };
 }
