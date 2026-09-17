@@ -1,8 +1,11 @@
-/* ═══════════════════════════════════════════
-   DiplomaStudy - Content View Styles
-   ═══════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   DiplomaStudy - Content View Styles (Clean)
+   Includes: Content Cards + MCQ + Formula + PDF Viewer
+   ═══════════════════════════════════════════════════════════════ */
 
-/* ─── Content Hero ─── */
+/* ═══════════════════════════════════════════
+   CONTENT HERO
+   ═══════════════════════════════════════════ */
 .content-hero {
   display: flex;
   align-items: center;
@@ -76,14 +79,18 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* ─── Content List ─── */
+/* ═══════════════════════════════════════════
+   CONTENT LIST
+   ═══════════════════════════════════════════ */
 .content-list {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-/* ─── Content Card ─── */
+/* ═══════════════════════════════════════════
+   CONTENT CARD
+   ═══════════════════════════════════════════ */
 .content-card {
   background: var(--color-surface);
   border: 1.5px solid var(--color-border);
@@ -145,7 +152,6 @@
   border: 1px solid var(--color-border);
 }
 
-/* ─── Content Card Title ─── */
 .content-card-title {
   font-size: 15px;
   font-weight: 800;
@@ -161,7 +167,6 @@
   margin: 0 0 12px 0;
 }
 
-/* ─── Content Card Label ─── */
 .content-card-label {
   display: flex;
   align-items: center;
@@ -178,7 +183,9 @@
   color: #15803D;
 }
 
-/* ─── Question Text ─── */
+/* ═══════════════════════════════════════════
+   QUESTION TEXT
+   ═══════════════════════════════════════════ */
 .content-card-question {
   font-size: 15px;
   font-weight: 700;
@@ -206,7 +213,9 @@
   white-space: pre-line;
 }
 
-/* ─── Toggle Answer Button ─── */
+/* ═══════════════════════════════════════════
+   TOGGLE ANSWER BUTTON
+   ═══════════════════════════════════════════ */
 .content-toggle-btn {
   display: flex;
   align-items: center;
@@ -238,7 +247,9 @@
   border-bottom: none;
 }
 
-/* ─── Answer Box ─── */
+/* ═══════════════════════════════════════════
+   ANSWER BOX
+   ═══════════════════════════════════════════ */
 .content-answer {
   background: linear-gradient(135deg, rgba(34, 197, 94, 0.05), rgba(74, 222, 128, 0.03));
   border: 1.5px solid rgba(34, 197, 94, 0.3);
@@ -291,7 +302,9 @@
   color: #B45309;
 }
 
-/* ─── MCQ ─── */
+/* ═══════════════════════════════════════════
+   MCQ
+   ═══════════════════════════════════════════ */
 .mcq-options {
   display: flex;
   flex-direction: column;
@@ -390,7 +403,9 @@
   animation: contentFadeIn 0.3s ease;
 }
 
-/* ─── Formula Box ─── */
+/* ═══════════════════════════════════════════
+   FORMULA BOX
+   ═══════════════════════════════════════════ */
 .content-formula-box {
   padding: 18px 20px;
   background: linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(20, 184, 166, 0.05));
@@ -410,295 +425,15 @@
   white-space: nowrap;
 }
 
-/* ─── PDF Card ─── */
+/* ═══════════════════════════════════════════
+   PDF PREVIEW ROW (inside ContentView PDF list)
+   ═══════════════════════════════════════════ */
 .pdf-card-view .content-card-actions {
   display: flex;
   gap: 8px;
   margin-top: 12px;
 }
 
-/* ─── Responsive ─── */
-@media (max-width: 380px) {
-  .content-hero {
-    padding: 12px;
-  }
-  .content-hero-icon {
-    width: 46px;
-    height: 46px;
-    font-size: 22px;
-  }
-  .content-hero-title {
-    font-size: 15px;
-  }
-  .content-hero-count {
-    width: 38px;
-    height: 38px;
-    font-size: 16px;
-  }
-  .content-card {
-    padding: 14px;
-  }
-  .content-card-question {
-    font-size: 14px;
-    padding: 12px 14px;
-  }
-  .mcq-option {
-    padding: 12px 14px;
-  }
-  .content-formula-box code {
-    font-size: 16px;
-  }
-}
-/* ═══════════════════════════════════════════
-   PDF Viewer Page
-   ═══════════════════════════════════════════ */
-.pdf-viewer-page {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-/* Info Card */
-.pdf-info-card {
-  background: var(--color-surface);
-  border: 1.5px solid var(--color-border);
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow: 0 2px 10px rgba(28, 62, 44, 0.06);
-}
-
-.pdf-info-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.pdf-info-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(185, 28, 28, 0.1), rgba(239, 68, 68, 0.1));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  flex-shrink: 0;
-}
-
-.pdf-info-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.pdf-info-title {
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--color-forest);
-  margin-bottom: 6px;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.pdf-info-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.pdf-meta-chip {
-  font-size: 10.5px;
-  font-weight: 700;
-  padding: 3px 8px;
-  background: var(--color-surface-hover);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  color: var(--color-text-muted);
-}
-
-/* Action Row */
-.pdf-action-row {
-  display: flex;
-  gap: 8px;
-}
-
-.pdf-main-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 14px 18px;
-  background: linear-gradient(135deg, var(--color-forest), var(--color-forest-dark));
-  color: #FFFFFF;
-  border: none;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 800;
-  text-decoration: none;
-  box-shadow: 0 6px 16px rgba(28, 62, 44, 0.25);
-  transition: all 0.2s ease;
-}
-
-.pdf-main-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(28, 62, 44, 0.35);
-}
-
-.pdf-main-btn:active {
-  transform: translateY(0);
-}
-
-.pdf-secondary-btn {
-  width: 52px;
-  height: 52px;
-  border-radius: 12px;
-  background: var(--color-surface);
-  border: 1.5px solid var(--color-border);
-  color: var(--color-forest);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-decoration: none;
-  transition: all 0.15s ease;
-  flex-shrink: 0;
-}
-
-.pdf-secondary-btn:hover {
-  background: var(--color-forest-soft);
-  border-color: var(--color-forest);
-}
-
-/* Tip Banner */
-.pdf-tip-banner {
-  display: flex;
-  gap: 10px;
-  padding: 12px 14px;
-  background: linear-gradient(135deg, #FEF3C7, #FDE68A);
-  border: 1.5px solid #FCD34D;
-  border-radius: 12px;
-}
-
-.pdf-tip-icon {
-  font-size: 18px;
-  flex-shrink: 0;
-  line-height: 1;
-  margin-top: 2px;
-}
-
-.pdf-tip-body {
-  flex: 1;
-  font-size: 12px;
-  color: #78350F;
-  line-height: 1.5;
-}
-
-.pdf-tip-body strong {
-  display: block;
-  font-weight: 800;
-  margin-bottom: 2px;
-  color: #92400E;
-}
-
-/* Embed Wrapper */
-.pdf-embed-wrapper {
-  background: var(--color-surface);
-  border: 1.5px solid var(--color-border);
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 2px 10px rgba(28, 62, 44, 0.06);
-}
-
-.pdf-embed-header {
-  display: flex;
-  align-items: center;
-  padding: 10px 14px;
-  background: var(--color-surface-hover);
-  border-bottom: 1px solid var(--color-border);
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-}
-
-.pdf-embed-container {
-  width: 100%;
-  height: 600px;
-  background: #F7F5EF;
-  position: relative;
-  overflow: hidden;
-}
-
-.pdf-iframe {
-  width: 100%;
-  height: 100%;
-  border: none;
-  display: block;
-}
-
-.pdf-embed-footer {
-  padding: 10px 14px;
-  background: var(--color-surface-hover);
-  border-top: 1px solid var(--color-border);
-  display: flex;
-  justify-content: flex-end;
-}
-
-.pdf-reload-btn {
-  padding: 8px 14px;
-  background: var(--color-surface);
-  border: 1.5px solid var(--color-border);
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--color-forest);
-  cursor: pointer;
-  font-family: inherit;
-  transition: all 0.15s ease;
-}
-
-.pdf-reload-btn:hover {
-  background: var(--color-forest-soft);
-  border-color: var(--color-forest);
-}
-
-/* Responsive */
-@media (max-width: 480px) {
-  .pdf-embed-container {
-    height: 450px;
-  }
-  .pdf-info-title {
-    font-size: 14px;
-  }
-  .pdf-info-icon {
-    width: 42px;
-    height: 42px;
-    font-size: 20px;
-  }
-  .pdf-main-btn {
-    padding: 12px 14px;
-    font-size: 13.5px;
-  }
-  .pdf-secondary-btn {
-    width: 46px;
-    height: 46px;
-  }
-}
-
-@media (max-width: 380px) {
-  .pdf-embed-container {
-    height: 380px;
-  }
-}
-
-/* ═══════════════════════════════════════════
-   PDF Preview Row (in ContentView)
-   ═══════════════════════════════════════════ */
 .pdf-preview-row {
   display: flex;
   align-items: center;
@@ -723,144 +458,8 @@
   min-width: 0;
 }
 
-/* Responsive */
-@media (max-width: 380px) {
-  .pdf-info-bar {
-    padding: 10px 12px;
-  }
-  .pdf-info-icon {
-    width: 36px;
-    height: 36px;
-    font-size: 18px;
-  }
-  .pdf-info-title {
-    font-size: 13px;
-  }
-  .pdf-action-btn {
-    width: 34px;
-    height: 34px;
-  }
-  .pdf-embed-container {
-    min-height: 400px;
-  }
-  .pdf-iframe {
-    min-height: 400px;
-  }
-}
 /* ═══════════════════════════════════════════
-   PDF Simple Page
-   ═══════════════════════════════════════════ */
-.pdf-simple-page {
-  text-align: center;
-  padding: 30px 20px;
-  background: var(--color-surface);
-  border: 1.5px solid var(--color-border);
-  border-radius: 20px;
-  margin-top: 10px;
-}
-
-.pdf-big-icon {
-  font-size: 64px;
-  line-height: 1;
-  margin-bottom: 16px;
-}
-
-.pdf-simple-title {
-  font-size: 18px;
-  font-weight: 800;
-  color: var(--color-forest);
-  margin: 0 0 8px 0;
-  line-height: 1.35;
-  letter-spacing: -0.3px;
-}
-
-.pdf-simple-file,
-.pdf-simple-size {
-  font-size: 12.5px;
-  color: var(--color-text-muted);
-  margin: 4px 0;
-  font-weight: 500;
-}
-
-.pdf-simple-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 24px 0 20px;
-}
-
-.pdf-open-primary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 16px 24px;
-  background: linear-gradient(135deg, var(--color-forest), var(--color-forest-dark));
-  color: #FFFFFF;
-  border-radius: 14px;
-  font-size: 15px;
-  font-weight: 800;
-  text-decoration: none;
-  box-shadow: 0 8px 20px rgba(28, 62, 44, 0.3);
-  transition: all 0.2s ease;
-}
-
-.pdf-open-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(28, 62, 44, 0.4);
-}
-
-.pdf-open-primary:active {
-  transform: translateY(0);
-}
-
-.pdf-open-secondary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 14px 24px;
-  background: var(--color-surface);
-  border: 2px solid var(--color-border);
-  color: var(--color-forest);
-  border-radius: 14px;
-  font-size: 14px;
-  font-weight: 800;
-  text-decoration: none;
-  transition: all 0.2s ease;
-}
-
-.pdf-open-secondary:hover {
-  background: var(--color-forest-soft);
-  border-color: var(--color-forest);
-}
-
-.pdf-simple-note {
-  display: flex;
-  gap: 10px;
-  padding: 12px 14px;
-  background: linear-gradient(135deg, #FEF3C7, #FDE68A);
-  border: 1.5px solid #FCD34D;
-  border-radius: 12px;
-  text-align: left;
-  margin-top: 16px;
-}
-
-.pdf-simple-note span {
-  font-size: 18px;
-  flex-shrink: 0;
-  line-height: 1;
-}
-
-.pdf-simple-note p {
-  font-size: 12px;
-  color: #78350F;
-  line-height: 1.5;
-  margin: 0;
-  font-weight: 500;
-}
-/* ═══════════════════════════════════════════
-   PDF Mobile Page
+   PDF VIEWER PAGE (Mobile)
    ═══════════════════════════════════════════ */
 .pdf-mobile-page {
   display: flex;
@@ -869,7 +468,7 @@
   padding-bottom: 20px;
 }
 
-/* Info */
+/* Info Card */
 .pdf-mobile-info {
   display: flex;
   gap: 12px;
@@ -1046,7 +645,9 @@
   color: #92400E;
 }
 
-/* Responsive */
+/* ═══════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════ */
 @media (max-width: 480px) {
   .pdf-iframe {
     height: 450px;
@@ -1057,6 +658,35 @@
 }
 
 @media (max-width: 380px) {
+  .content-hero {
+    padding: 12px;
+  }
+  .content-hero-icon {
+    width: 46px;
+    height: 46px;
+    font-size: 22px;
+  }
+  .content-hero-title {
+    font-size: 15px;
+  }
+  .content-hero-count {
+    width: 38px;
+    height: 38px;
+    font-size: 16px;
+  }
+  .content-card {
+    padding: 14px;
+  }
+  .content-card-question {
+    font-size: 14px;
+    padding: 12px 14px;
+  }
+  .mcq-option {
+    padding: 12px 14px;
+  }
+  .content-formula-box code {
+    font-size: 16px;
+  }
   .pdf-iframe {
     height: 400px;
   }
@@ -1066,8 +696,5 @@
   .pdf-tool-primary {
     font-size: 12px;
     padding: 11px 14px;
-  }
-  .pdf-view-btn {
-    font-size: 12px;
   }
 }
