@@ -182,7 +182,7 @@ export async function renderContentView(params = {}) {
   main.querySelectorAll(".content-toggle-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-id");
-      const answerEl = main.querySelector(`#answer-${id}`);
+      const answerEl = main.querySelector(`#${id}`);
       if (!answerEl) return;
       const isHidden = answerEl.style.display === "none" || !answerEl.style.display;
       answerEl.style.display = isHidden ? "block" : "none";
@@ -195,8 +195,6 @@ export async function renderContentView(params = {}) {
   // MCQ option select
   main.querySelectorAll(".mcq-option").forEach((optEl) => {
     optEl.addEventListener("click", () => {
-      const id = optEl.getAttribute("data-qid");
-      const option = optEl.getAttribute("data-option");
       const card = optEl.closest(".mcq-card");
       if (!card) return;
 
@@ -219,16 +217,20 @@ export async function renderContentView(params = {}) {
     });
   });
 
-  // PDF open button (just open in new tab)
-  main.querySelectorAll(".pdf-open-btn").forEach((btn) => {
+  // PDF View button → navigate to viewer page
+  main.querySelectorAll(".pdf-view-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => {
-      const url = btn.getAttribute("data-url");
-      if (!url) {
-        e.preventDefault();
+      e.preventDefault();
+      const pdfId = btn.getAttribute("data-pdf-id");
+      const card = btn.closest(".pdf-card-view");
+      const pdfUrl = card?.getAttribute("data-pdf-url");
+
+      if (!pdfUrl) {
         showComingSoon("PDF");
         return;
       }
-      window.open(url, "_blank", "noopener,noreferrer");
+
+      router.navigate(`#/pdf-viewer?pdfId=${pdfId}&chapterId=${chapterId}&subjectId=${subjectId}`);
     });
   });
 }
@@ -248,7 +250,7 @@ function renderItem(item, type, idx, config) {
 // ─── PDF ───
 function renderPdf(pdf, idx) {
   return `
-    <div class="content-card pdf-card-view">
+    <div class="content-card pdf-card-view" data-pdf-id="${pdf.id}" data-pdf-url="${pdf.fileUrl || ''}">
       <div class="content-card-header">
         <div class="content-card-num">${String(idx + 1).padStart(2, "0")}</div>
         <div class="content-card-tags">
@@ -258,19 +260,33 @@ function renderPdf(pdf, idx) {
           ${pdf.fileSize ? `<span class="content-tag content-tag-ghost">${pdf.fileSize}</span>` : ''}
         </div>
       </div>
-      <h3 class="content-card-title">${escapeHtml(pdf.title)}</h3>
-      ${pdf.fileName ? `<p class="content-card-sub">${escapeHtml(pdf.fileName)}</p>` : ''}
+
+      <div class="pdf-preview-row">
+        <div class="pdf-preview-icon">📄</div>
+        <div class="pdf-preview-body">
+          <h3 class="content-card-title" style="margin-bottom: 3px;">${escapeHtml(pdf.title)}</h3>
+          ${pdf.fileName ? `<p class="content-card-sub" style="margin: 0;">${escapeHtml(pdf.fileName)}</p>` : ''}
+        </div>
+      </div>
+
       <div class="content-card-actions">
         ${pdf.fileUrl ? `
-          <a href="${pdf.fileUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm flex-1">
+          <button class="btn btn-primary btn-sm flex-1 pdf-view-btn" data-pdf-id="${pdf.id}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
               <circle cx="12" cy="12" r="3"></circle>
             </svg>
-            <span>Open PDF</span>
-          </a>
+            <span>পড়ুন</span>
+          </button>
+          <a href="${pdf.fileUrl}" download class="btn btn-secondary btn-sm" title="Download">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </button>
         ` : `
-          <button class="btn btn-secondary btn-sm flex-1 pdf-open-btn">
+          <button class="btn btn-secondary btn-sm flex-1" disabled>
             <span>PDF Coming Soon</span>
           </button>
         `}

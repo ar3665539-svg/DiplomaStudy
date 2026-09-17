@@ -1,6 +1,7 @@
 /**
  * DiplomaStudy User App - API Service
  * Supabase + localStorage cache
+ * Field names normalized to camelCase
  */
 
 import { supabase } from '../core/supabase.js';
@@ -107,8 +108,24 @@ function normalizeFormula(f) {
   };
 }
 
+// ═══════════════════════════════════════════
+// PDF NORMALIZER — file_path = source of truth
+// ═══════════════════════════════════════════
 function normalizePdf(p) {
   if (!p) return null;
+  
+  let publicUrl = null;
+  
+  // ⭐ Priority 1: file_path → generate URL dynamically
+  if (p.file_path && p.file_path.trim() !== '') {
+    const { data } = supabase.storage.from('pdfs').getPublicUrl(p.file_path);
+    publicUrl = data?.publicUrl || null;
+  }
+  // ⭐ Fallback: file_url (for legacy records only)
+  else if (p.file_url) {
+    publicUrl = p.file_url;
+  }
+  
   return {
     id: p.id,
     subjectId: p.subject_id || p.subjectId,
@@ -116,7 +133,8 @@ function normalizePdf(p) {
     title: p.title,
     fileName: p.file_name || '',
     fileSize: p.file_size || '',
-    fileUrl: p.file_url || '',
+    filePath: p.file_path || '',
+    fileUrl: publicUrl,           // ⭐ always computed from file_path
     createdAt: p.created_at || p.createdAt
   };
 }
@@ -158,7 +176,6 @@ export async function getSubjects() {
   }
 }
 
-// ⭐ THIS IS THE MISSING FUNCTION ⭐
 export async function getSubjectById(id) {
   if (!id) return null;
   const subs = await getSubjects();
