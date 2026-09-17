@@ -3123,3 +3123,44 @@
     font-size: 12px;
   }
 }
+/* ═══════════════════════════════════════════
+   Hero Change Button (Home)
+   ═══════════════════════════════════════════ */
+.home-hero-title-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.home-hero-title-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.home-hero-change-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.home-hero-change-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: rotate(180deg) scale(1.05);
+}
+
+.home-hero-change-btn:active {
+  transform: rotate(180deg) scale(0.95);
+}

@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mobile Debug</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, monospace;
+      background: #0F172A;
+      color: #F1F5F9;
+      padding: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    h1 {
+      color: #60A5FA;
+      font-size: 18px;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    .box {
+      background: #1E293B;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 10px;
+      border-left: 4px solid #64748B;
+    }
+    .box.ok { border-left-color: #22C55E; }
+    .box.fail { border-left-color: #EF4444; }
+    .box.info { border-left-color: #3B82F6; }
+    .box.warn { border-left-color: #F59E0B; }
+    .label {
+      font-size: 11px;
+      color: #94A3B8;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .value {
+      font-size: 12px;
+      color: #F1F5F9;
+      word-break: break-all;
+      font-family: monospace;
+    }
+    .btn {
+      width: 100%;
+      padding: 14px;
+      background: #3B82F6;
+      color: #FFF;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 800;
+      margin-top: 8px;
+      cursor: pointer;
+    }
+    .btn-red { background: #EF4444; }
+    pre {
+      background: #0F172A;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin-top: 4px;
+      color: #F87171;
+    }
+  </style>
+</head>
+<body>
+  <h1>📱 Mobile Debug</h1>
+  <div id="output">
+    <div class="box info">
+      <div class="label">Status</div>
+      <div class="value">Loading...</div>
+    </div>
+  </div>
+  <button class="btn" id="reload-btn">🔄 Reload Test</button>
+  <button class="btn btn-red" id="clear-btn">🗑️ Clear Cache & Reload</button>
+
+  <script>
+    const out = document.getElementById('output');
+    const log = (label, value, type = 'info') => {
+      const div = document.createElement('div');
+      div.className = 'box ' + type;
+      div.innerHTML = `<div class="label">${label}</div><div class="value">${value}</div>`;
+      out.appendChild(div);
+    };
+
+    const logPre = (label, text, type = 'fail') => {
+      const div = document.createElement('div');
+      div.className = 'box ' + type;
+      div.innerHTML = `<div class="label">${label}</div><pre>${text}</pre>`;
+      out.appendChild(div);
+    };
+
+    // ═══════════════════════════════════════
+    // STEP 1: Environment Info
+    // ═══════════════════════════════════════
+    log('URL', window.location.href, 'info');
+    log('Hash', window.location.hash || '(empty)', 'info');
+    log('User Agent', navigator.userAgent.substring(0, 80), 'info');
+
+    // ═══════════════════════════════════════
+    // STEP 2: Check localStorage
+    // ═══════════════════════════════════════
+    try {
+      const settings = localStorage.getItem('diplomastudy_settings');
+      log('localStorage settings', settings || '(empty)', settings ? 'ok' : 'warn');
+    } catch (e) {
+      log('localStorage Error', e.message, 'fail');
+    }
+
+    // ═══════════════════════════════════════
+    // STEP 3: Load main.js manually
+    // ═══════════════════════════════════════
+    (async () => {
+      try {
+        log('Loading main.js', 'Please wait...', 'info');
+        const response = await fetch('./js/main.js');
+        if (!response.ok) {
+          log('main.js Status', `❌ HTTP ${response.status}`, 'fail');
+          return;
+        }
+        const text = await response.text();
+        log('main.js Size', `${text.length} bytes`, 'ok');
+
+        if (text.includes('renderOnboarding')) {
+          log('renderOnboarding in main.js', '✅ Found', 'ok');
+        } else {
+          log('renderOnboarding in main.js', '❌ NOT FOUND — OLD CODE!', 'fail');
+        }
+
+        if (text.includes('hasCompletedOnboarding')) {
+          log('hasCompletedOnboarding', '✅ Found', 'ok');
+        } else {
+          log('hasCompletedOnboarding', '❌ NOT FOUND', 'fail');
+        }
+
+        // Try to import it
+        try {
+          await import('./js/main.js');
+          log('main.js import', '✅ Success — no syntax error', 'ok');
+        } catch (e) {
+          logPre('main.js import FAILED', e.message + '\n\n' + (e.stack || ''), 'fail');
+        }
+
+        // Load Onboarding
+        try {
+          const onboarding = await import('./js/pages/Onboarding.js');
+          if (typeof onboarding.renderOnboarding === 'function') {
+            log('Onboarding.js', '✅ renderOnboarding exists', 'ok');
+          } else {
+            log('Onboarding.js', '❌ renderOnboarding missing', 'fail');
+          }
+        } catch (e) {
+          logPre('Onboarding.js FAILED', e.message + '\n\n' + (e.stack || ''), 'fail');
+        }
+
+      } catch (e) {
+        logPre('Failed', e.message, 'fail');
+      }
+
+      // ═══════════════════════════════════════
+      // STEP 4: Check Service Worker
+      // ═══════════════════════════════════════
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        log('Service Workers', regs.length + ' registered', regs.length > 0 ? 'warn' : 'ok');
+      }
+    })();
+
+    // ═══════════════════════════════════════
+    // Buttons
+    // ═══════════════════════════════════════
+    document.getElementById('reload-btn').onclick = () => location.reload();
+
+    document.getElementById('clear-btn').onclick = async () => {
+      if (confirm('Clear all cache + localStorage?')) {
+        // Clear SW
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const reg of regs) await reg.unregister();
+        }
+        // Clear caches
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k)));
+        }
+        // Clear localStorage
+        localStorage.clear();
+        // Reload
+        location.reload();
+      }
+    };
+
+    // Also catch any errors that happen on this page
+    window.addEventListener('error', (e) => {
+      logPre('Error on page', e.message + '\n' + (e.filename || '') + ':' + (e.lineno || ''), 'fail');
+    });
+  </script>
+</body>
+</html>
