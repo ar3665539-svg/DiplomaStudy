@@ -1,22 +1,47 @@
 /**
- * DiplomaStudy User App - API Service v3
- * DB-driven + Realtime-aware cache invalidation
+ * DiplomaStudy User App - API Service v5
+ * Cache-first: return cached data INSTANTLY, refresh in background.
  */
 
 import { supabase } from '../core/supabase.js';
 
 // ═══════════════════════════════════════════
-// CACHE
+// MEMORY CACHE (short TTL)
+// ═══════════════════════════════════════════
+const MEM_TTL = 60000;
+const _mem = new Map();
+
+function memGet(key) {
+  const entry = _mem.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.t > MEM_TTL) { _mem.delete(key); return null; }
+  return entry.p;
+}
+function memSet(key, promise) {
+  _mem.set(key, { p: promise, t: Date.now() });
+  promise.catch(() => { _mem.delete(key); });
+  return promise;
+}
+function memClear(prefix) {
+  if (!prefix) { _mem.clear(); return; }
+  for (const k of _mem.keys()) {
+    if (k.indexOf(prefix) === 0) _mem.delete(k);
+  }
+}
+
+// ═══════════════════════════════════════════
+// LOCALSTORAGE CACHE
 // ═══════════════════════════════════════════
 const CACHE_PREFIX = 'diplomastudy_cache_v2_';
+const CACHE_TTL = 24 * 60 * 60 * 1000;
 
 function saveCache(key, data) {
   try {
-    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ data, cachedAt: Date.now() }));
+    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ data: data, cachedAt: Date.now() }));
   } catch (e) {}
 }
-
-function getCache(key, maxAgeMs = 24 * 60 * 60 * 1000) {
+function getCache(key, maxAgeMs) {
+  if (maxAgeMs === undefined) maxAgeMs = CACHE_TTL;
   try {
     const raw = localStorage.getItem(CACHE_PREFIX + key);
     if (!raw) return null;
@@ -25,185 +50,166 @@ function getCache(key, maxAgeMs = 24 * 60 * 60 * 1000) {
     return parsed.data;
   } catch (e) { return null; }
 }
-
 export function clearCache() {
   try {
-    const keys = Object.keys(localStorage).filter((k) => k.startsWith(CACHE_PREFIX));
-    keys.forEach((k) => localStorage.removeItem(k));
+    const keys = Object.keys(localStorage).filter(function (k) { return k.indexOf(CACHE_PREFIX) === 0; });
+    keys.forEach(function (k) { localStorage.removeItem(k); });
   } catch (e) {}
+  memClear();
 }
-
 export function invalidateCache(pattern) {
   try {
-    const keys = Object.keys(localStorage).filter((k) =>
-      k.startsWith(CACHE_PREFIX) && k.includes(pattern)
-    );
-    keys.forEach((k) => localStorage.removeItem(k));
+    const keys = Object.keys(localStorage).filter(function (k) {
+      return k.indexOf(CACHE_PREFIX) === 0 && k.indexOf(pattern) !== -1;
+    });
+    keys.forEach(function (k) { localStorage.removeItem(k); });
   } catch (e) {}
+  memClear(pattern);
 }
 
+// ═══════════════════════════════════════════
+// CACHE-FIRST HELPER
+// If cache exists, return it IMMEDIATELY, then refresh in background.
+// If no cache, wait for network.
+// ═══════════════════════════════════════════
+function hasData(v) {
+  if (v == null) return false;
+  if (Array.isArray(v)) return v.length > 0;
+  return true;
+}
+
+function cacheFirst(memKey, cacheKey, fetchFn) {
+  // 1. Memory cache
+  const mem = memGet(memKey);
+  if (mem) return mem;
+
+  // 2. localStorage cache - return instantly, refresh background
+  const cached = getCache(cacheKey);
+  if (hasData(cached)) {
+    // Fire-and-forget background refresh
+    Promise.resolve().then(fetchFn).then(function (fresh) {
+      if (hasData(fresh)) {
+        saveCache(cacheKey, fresh);
+        memSet(memKey, Promise.resolve(fresh));
+      }
+    }).catch(function () {});
+    // Return cached data immediately (wrapped in resolved promise)
+    return Promise.resolve(cached);
+  }
+
+  // 3. No cache - fetch from network
+  const p = Promise.resolve().then(fetchFn);
+  return memSet(memKey, p);
+}
+
+// ═══════════════════════════════════════════
+// EVENT LISTENER for invalidation
+// ═══════════════════════════════════════════
 try {
-  window.addEventListener("ds:content-change", (e) => {
-    const { table } = e.detail || {};
+  window.addEventListener("ds:content-change", function (e) {
+    const table = (e.detail || {}).table;
     if (!table) return;
     const mapping = {
-      departments: ["departments"],
-      semesters: ["semesters"],
-      subjects: ["subjects"],
-      subject_assignments: ["subjects"],
-      chapters: ["chapters", "subjects"],
-      topics: ["topics", "chapters"],
-      questions: ["questions", "chapters"],
-      suggestions: ["suggestions", "chapters"],
-      formulas: ["formulas", "chapters"],
-      pdfs: ["pdfs", "chapters"],
-      notices: ["notices"],
-      quizzes: ["quizzes"]
+      departments: ["departments"], semesters: ["semesters"],
+      subjects: ["subjects"], subject_assignments: ["subjects"],
+      chapters: ["chapters", "subjects"], topics: ["topics", "chapters"],
+      questions: ["questions", "chapters"], suggestions: ["suggestions", "chapters"],
+      formulas: ["formulas", "chapters"], pdfs: ["pdfs", "chapters"],
+      notices: ["notices"], quizzes: ["quizzes"]
     };
     const prefixes = mapping[table] || [table];
-    prefixes.forEach((p) => invalidateCache(p));
+    prefixes.forEach(function (p) { invalidateCache(p); });
   });
 } catch (e) {}
 
 function isUUID(v) {
-  return typeof v === "string" && v.length >= 30 && v.includes("-");
+  return typeof v === "string" && v.length >= 30 && v.indexOf("-") !== -1;
 }
 
 // ═══════════════════════════════════════════
 // NORMALIZERS
 // ═══════════════════════════════════════════
+const ICON_DEPT = "\uD83C\uDFDB\uFE0F";
+const ICON_SEM  = "\uD83D\uDCC5";
+const ICON_SUB  = "\uD83D\uDCDA";
+const ICON_CHAP = "\uD83D\uDCD6";
+
 function normalizeDepartment(d) {
   if (!d) return null;
   return {
-    id: d.id, name: d.name,
-    banglaName: d.bangla_name || '',
-    code: d.code || '',
-    icon: d.icon || '🏛️',
-    description: d.description || '',
-    displayOrder: d.display_order || 0
+    id: d.id, name: d.name, banglaName: d.bangla_name || '',
+    code: d.code || '', icon: d.icon || ICON_DEPT,
+    description: d.description || '', displayOrder: d.display_order || 0
   };
 }
-
 function normalizeSemester(s) {
   if (!s) return null;
   return {
-    id: s.id,
-    departmentId: s.department_id,
-    name: s.name, number: s.number,
-    icon: s.icon || '📅',
-    displayOrder: s.display_order || 0
+    id: s.id, departmentId: s.department_id, name: s.name, number: s.number,
+    icon: s.icon || ICON_SEM, displayOrder: s.display_order || 0
   };
 }
-
 function normalizeSubject(s) {
   if (!s) return null;
   return {
-    id: s.id, name: s.name,
-    banglaName: s.bangla_name || '',
-    code: s.code || '',
-    icon: s.icon || '📚',
-    type: s.type || 'Theory',
-    credits: s.credits || 3,
-    description: s.description || '',
-    department: s.department || '',
-    semester: s.semester || 1,
-    departmentId: s.department_id,
-    semesterId: s.semester_id
+    id: s.id, name: s.name, banglaName: s.bangla_name || '', code: s.code || '',
+    icon: s.icon || ICON_SUB, type: s.type || 'Theory', credits: s.credits || 3,
+    description: s.description || '', department: s.department || '',
+    semester: s.semester || 1, departmentId: s.department_id, semesterId: s.semester_id
   };
 }
-
 function normalizeChapter(c) {
   if (!c) return null;
   return {
-    id: c.id,
-    subjectId: c.subject_id,
-    number: c.number,
-    sortOrder: c.sort_order || 0,
-    name: c.name,
-    nameEn: c.name_en || '',
-    icon: c.icon || '📖',
-    category: c.category || '',
-    description: c.description || ''
+    id: c.id, subjectId: c.subject_id, number: c.number,
+    sortOrder: c.sort_order || 0, name: c.name, nameEn: c.name_en || '',
+    icon: c.icon || ICON_CHAP, category: c.category || '', description: c.description || ''
   };
 }
-
 function normalizeQuestion(q) {
   if (!q) return null;
   return {
-    id: q.id, type: q.type,
-    subjectId: q.subject_id,
-    chapterId: q.chapter_id,
-    question: q.question,
-    questionEn: q.question_en || '',
-    answer: q.answer,
-    options: q.options || [],
-    correctLetter: q.correct_letter || '',
-    explanation: q.explanation || '',
-    marks: q.marks || '',
-    board: q.board || '',
+    id: q.id, type: q.type, subjectId: q.subject_id, chapterId: q.chapter_id,
+    question: q.question, questionEn: q.question_en || '', answer: q.answer,
+    options: q.options || [], correctLetter: q.correct_letter || '',
+    explanation: q.explanation || '', marks: q.marks || '', board: q.board || '',
     createdAt: q.created_at
   };
 }
-
 function normalizeSuggestion(s) {
   if (!s) return null;
   return {
-    id: s.id,
-    subjectId: s.subject_id,
-    chapterId: s.chapter_id,
-    title: s.title,
-    category: s.category || 'Most Important',
-    summary: s.summary,
-    examTip: s.exam_tip || '',
-    createdAt: s.created_at
+    id: s.id, subjectId: s.subject_id, chapterId: s.chapter_id,
+    title: s.title, category: s.category || 'Most Important',
+    summary: s.summary, examTip: s.exam_tip || '', createdAt: s.created_at
   };
 }
-
 function normalizeFormula(f) {
   if (!f) return null;
   return {
-    id: f.id,
-    subjectId: f.subject_id,
-    chapterId: f.chapter_id,
-    name: f.name,
-    equation: f.equation,
-    explanation: f.explanation || '',
-    example: f.example || '',
-    createdAt: f.created_at
+    id: f.id, subjectId: f.subject_id, chapterId: f.chapter_id,
+    name: f.name, equation: f.equation, explanation: f.explanation || '',
+    example: f.example || '', createdAt: f.created_at
   };
 }
-
 function normalizePdf(p) {
   if (!p) return null;
   let publicUrl = null;
   if (p.file_path && p.file_path.trim() !== '') {
-    const { data } = supabase.storage.from('pdfs').getPublicUrl(p.file_path);
-    publicUrl = data?.publicUrl || null;
-  } else if (p.file_url) {
-    publicUrl = p.file_url;
-  }
+    const result = supabase.storage.from('pdfs').getPublicUrl(p.file_path);
+    publicUrl = (result.data && result.data.publicUrl) || null;
+  } else if (p.file_url) { publicUrl = p.file_url; }
   return {
-    id: p.id,
-    subjectId: p.subject_id,
-    chapterId: p.chapter_id,
-    title: p.title,
-    fileName: p.file_name || '',
-    fileSize: p.file_size || '',
-    filePath: p.file_path || '',
-    fileUrl: publicUrl,
-    description: p.description || '',
-    createdAt: p.created_at
+    id: p.id, subjectId: p.subject_id, chapterId: p.chapter_id, title: p.title,
+    fileName: p.file_name || '', fileSize: p.file_size || '', filePath: p.file_path || '',
+    fileUrl: publicUrl, description: p.description || '', createdAt: p.created_at
   };
 }
-
 function normalizeNotice(n) {
   if (!n) return null;
   return {
-    id: n.id, title: n.title, content: n.content,
-    audience: n.audience || 'all',
-    departmentId: n.department_id,
-    publishedAt: n.published_at,
-    createdAt: n.created_at
+    id: n.id, title: n.title, content: n.content, audience: n.audience || 'all',
+    departmentId: n.department_id, publishedAt: n.published_at, createdAt: n.created_at
   };
 }
 
@@ -224,7 +230,6 @@ function getSettings() {
     return { departmentId: "", semesterId: "", department: "", semester: 1, semesterNumber: 1 };
   }
 }
-
 function syncBackSettings(deptId, semId, semNumber) {
   try {
     const raw = JSON.parse(localStorage.getItem("diplomastudy_settings") || "{}");
@@ -239,30 +244,25 @@ function syncBackSettings(deptId, semId, semNumber) {
 // DEPARTMENTS
 // ═══════════════════════════════════════════
 export async function getDepartments() {
-  const cacheKey = "departments";
-  try {
-    const { data, error } = await supabase
-      .from('departments').select('*').eq('is_active', true)
-      .order('display_order', { ascending: true });
-    if (error) throw error;
-    if (data && data.length > 0) {
-      const normalized = data.map(normalizeDepartment);
-      saveCache(cacheKey, normalized);
-      return normalized;
-    }
-    return getCache(cacheKey) || [];
-  } catch (err) {
-    return getCache(cacheKey) || [];
-  }
+  return cacheFirst("departments", "departments", async function () {
+    try {
+      const res = await supabase.from('departments').select('*').eq('is_active', true)
+        .order('display_order', { ascending: true });
+      if (res.error) throw res.error;
+      return (res.data || []).map(normalizeDepartment);
+    } catch (err) { return []; }
+  });
 }
 
 export async function getDepartmentById(id) {
   if (!id) return null;
-  try {
-    const { data, error } = await supabase.from('departments').select('*').eq('id', id).maybeSingle();
-    if (error) throw error;
-    return normalizeDepartment(data);
-  } catch (err) { return null; }
+  return cacheFirst("dept_" + id, "dept_" + id, async function () {
+    try {
+      const res = await supabase.from('departments').select('*').eq('id', id).maybeSingle();
+      if (res.error) throw res.error;
+      return normalizeDepartment(res.data);
+    } catch (err) { return null; }
+  });
 }
 
 // ═══════════════════════════════════════════
@@ -270,35 +270,26 @@ export async function getDepartmentById(id) {
 // ═══════════════════════════════════════════
 export async function getSemestersByDepartment(deptId) {
   if (!deptId) return [];
-  const cacheKey = "semesters_" + deptId;
-  try {
-    const { data, error } = await supabase
-      .from('semesters').select('*').eq('department_id', deptId).eq('is_active', true)
-      .order('number', { ascending: true });
-    if (error) throw error;
-    if (data && data.length > 0) {
-      const normalized = data.map(normalizeSemester);
-      saveCache(cacheKey, normalized);
-      return normalized;
-    }
-    return getCache(cacheKey) || [];
-  } catch (err) { return getCache(cacheKey) || []; }
+  return cacheFirst("semesters_" + deptId, "semesters_" + deptId, async function () {
+    try {
+      const res = await supabase.from('semesters').select('*')
+        .eq('department_id', deptId).eq('is_active', true)
+        .order('number', { ascending: true });
+      if (res.error) throw res.error;
+      return (res.data || []).map(normalizeSemester);
+    } catch (err) { return []; }
+  });
 }
 
 export async function getAllSemesters() {
-  const cacheKey = "semesters_all";
-  try {
-    const { data, error } = await supabase
-      .from('semesters').select('*').eq('is_active', true)
-      .order('number', { ascending: true });
-    if (error) throw error;
-    if (data && data.length > 0) {
-      const normalized = data.map(normalizeSemester);
-      saveCache(cacheKey, normalized);
-      return normalized;
-    }
-    return getCache(cacheKey) || [];
-  } catch (err) { return getCache(cacheKey) || []; }
+  return cacheFirst("semesters_all", "semesters_all", async function () {
+    try {
+      const res = await supabase.from('semesters').select('*').eq('is_active', true)
+        .order('number', { ascending: true });
+      if (res.error) throw res.error;
+      return (res.data || []).map(normalizeSemester);
+    } catch (err) { return []; }
+  });
 }
 
 // ═══════════════════════════════════════════
@@ -311,17 +302,16 @@ export async function getSubjects() {
   const depts = await getDepartments();
 
   if (!isUUID(deptId) || !deptId) {
-    deptObj = depts.find((d) =>
-      (d.code && d.code.toLowerCase() === String(deptId).toLowerCase()) ||
-      (d.name && d.name.toLowerCase().includes(String(deptId).toLowerCase())) ||
-      d.id === deptId
-    );
+    deptObj = depts.find(function (d) {
+      return (d.code && d.code.toLowerCase() === String(deptId).toLowerCase()) ||
+             (d.name && d.name.toLowerCase().indexOf(String(deptId).toLowerCase()) !== -1) ||
+             d.id === deptId;
+    });
     if (deptObj) deptId = deptObj.id;
     else if (depts.length > 0) { deptObj = depts[0]; deptId = depts[0].id; }
   } else {
-    deptObj = depts.find((d) => d.id === deptId);
+    deptObj = depts.find(function (d) { return d.id === deptId; });
   }
-
   if (!deptId) return [];
 
   let semId = settings.semesterId || settings.semester || "";
@@ -330,64 +320,61 @@ export async function getSubjects() {
 
   if (!isUUID(semId) || !semId) {
     const semNumber = parseInt(settings.semesterNumber || settings.semester || 1, 10);
-    semObj = sems.find((s) => s.id === semId || s.number === semNumber);
+    semObj = sems.find(function (s) { return s.id === semId || s.number === semNumber; });
     if (semObj) semId = semObj.id;
     else if (sems.length > 0) { semObj = sems[0]; semId = sems[0].id; }
   } else {
-    semObj = sems.find((s) => s.id === semId);
+    semObj = sems.find(function (s) { return s.id === semId; });
   }
 
-  syncBackSettings(deptId, semId, semObj?.number);
-
+  syncBackSettings(deptId, semId, semObj && semObj.number);
   if (!semId) return getSubjectsByAssignment(deptId, null);
   return getSubjectsByAssignment(deptId, semId);
 }
 
 export async function getSubjectsByAssignment(deptId, semId) {
   if (!deptId) return [];
-  const cacheKey = `subjects_${deptId}_${semId || 'all'}`;
+  const key = "subjects_" + deptId + "_" + (semId || "all");
+  return cacheFirst(key, key, async function () {
+    try {
+      let query = supabase.from('subject_assignments').select('subject_id')
+        .eq('department_id', deptId).eq('is_active', true);
+      if (semId) query = query.eq('semester_id', semId);
+      const aRes = await query;
+      if (aRes.error) throw aRes.error;
 
-  try {
-    let query = supabase.from('subject_assignments').select('subject_id')
-      .eq('department_id', deptId).eq('is_active', true);
-    if (semId) query = query.eq('semester_id', semId);
-    const { data: assignments, error: aErr } = await query;
-    if (aErr) throw aErr;
+      const subjectIds = [];
+      const seen = {};
+      (aRes.data || []).forEach(function (a) {
+        if (!seen[a.subject_id]) { seen[a.subject_id] = true; subjectIds.push(a.subject_id); }
+      });
 
-    const subjectIds = [...new Set((assignments || []).map((a) => a.subject_id))];
-    if (subjectIds.length === 0) {
-      let legacy = supabase.from('subjects').select('*').eq('department_id', deptId).eq('is_active', true);
-      if (semId) legacy = legacy.eq('semester_id', semId);
-      const { data: legacyData } = await legacy.order('display_order', { ascending: true });
-      if (legacyData && legacyData.length > 0) {
-        const normalized = legacyData.map(normalizeSubject);
-        saveCache(cacheKey, normalized);
-        return normalized;
+      if (subjectIds.length === 0) {
+        let legacy = supabase.from('subjects').select('*')
+          .eq('department_id', deptId).eq('is_active', true);
+        if (semId) legacy = legacy.eq('semester_id', semId);
+        const lRes = await legacy.order('display_order', { ascending: true });
+        return (lRes.data || []).map(normalizeSubject);
       }
-      return getCache(cacheKey) || [];
-    }
 
-    const { data, error } = await supabase.from('subjects').select('*')
-      .in('id', subjectIds).eq('is_active', true)
-      .order('display_order', { ascending: true });
-    if (error) throw error;
-
-    if (data && data.length > 0) {
-      const normalized = data.map(normalizeSubject);
-      saveCache(cacheKey, normalized);
-      return normalized;
-    }
-    return getCache(cacheKey) || [];
-  } catch (err) { return getCache(cacheKey) || []; }
+      const sRes = await supabase.from('subjects').select('*')
+        .in('id', subjectIds).eq('is_active', true)
+        .order('display_order', { ascending: true });
+      if (sRes.error) throw sRes.error;
+      return (sRes.data || []).map(normalizeSubject);
+    } catch (err) { return []; }
+  });
 }
 
 export async function getSubjectById(id) {
   if (!id) return null;
-  try {
-    const { data, error } = await supabase.from('subjects').select('*').eq('id', id).maybeSingle();
-    if (error) throw error;
-    return normalizeSubject(data);
-  } catch (err) { return null; }
+  return cacheFirst("subject_" + id, "subject_" + id, async function () {
+    try {
+      const res = await supabase.from('subjects').select('*').eq('id', id).maybeSingle();
+      if (res.error) throw res.error;
+      return normalizeSubject(res.data);
+    } catch (err) { return null; }
+  });
 }
 
 // ═══════════════════════════════════════════
@@ -395,50 +382,45 @@ export async function getSubjectById(id) {
 // ═══════════════════════════════════════════
 export async function getChaptersBySubject(subjectId) {
   if (!subjectId) return [];
-  const cacheKey = "chapters_" + subjectId;
-  try {
-    const { data, error } = await supabase.from('chapters').select('*')
-      .eq('subject_id', subjectId).eq('is_active', true)
-      .order('sort_order', { ascending: true });
-    if (error) throw error;
-    if (data && data.length > 0) {
-      const normalized = data.map(normalizeChapter);
-      saveCache(cacheKey, normalized);
-      return normalized;
-    }
-    return getCache(cacheKey) || [];
-  } catch (err) { return getCache(cacheKey) || []; }
+  return cacheFirst("chapters_" + subjectId, "chapters_" + subjectId, async function () {
+    try {
+      const res = await supabase.from('chapters').select('*')
+        .eq('subject_id', subjectId).eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (res.error) throw res.error;
+      return (res.data || []).map(normalizeChapter);
+    } catch (err) { return []; }
+  });
 }
 
 export async function getChapterById(chapterId) {
   if (!chapterId) return null;
-  try {
-    const { data, error } = await supabase.from('chapters').select('*').eq('id', chapterId).maybeSingle();
-    if (error) throw error;
-    return normalizeChapter(data);
-  } catch (err) { return null; }
+  return cacheFirst("chapter_" + chapterId, "chapter_" + chapterId, async function () {
+    try {
+      const res = await supabase.from('chapters').select('*').eq('id', chapterId).maybeSingle();
+      if (res.error) throw res.error;
+      return normalizeChapter(res.data);
+    } catch (err) { return null; }
+  });
 }
 
 // ═══════════════════════════════════════════
 // QUESTIONS
 // ═══════════════════════════════════════════
-export async function getQuestionsByChapter(chapterId, type = null) {
+export async function getQuestionsByChapter(chapterId, type) {
   if (!chapterId) return [];
-  const cacheKey = 'questions_' + chapterId + (type ? '_' + type : '');
-  try {
-    let query = supabase.from('questions').select('*')
-      .eq('chapter_id', chapterId).eq('is_active', true)
-      .order('created_at', { ascending: false });
-    if (type) query = query.eq('type', type);
-    const { data, error } = await query;
-    if (error) throw error;
-    if (data && data.length > 0) {
-      const normalized = data.map(normalizeQuestion);
-      saveCache(cacheKey, normalized);
-      return normalized;
-    }
-    return getCache(cacheKey) || [];
-  } catch (err) { return getCache(cacheKey) || []; }
+  const key = "questions_" + chapterId + "_" + (type || "all");
+  return cacheFirst(key, "questions_" + chapterId + (type ? "_" + type : ""), async function () {
+    try {
+      let query = supabase.from('questions').select('*')
+        .eq('chapter_id', chapterId).eq('is_active', true)
+        .order('created_at', { ascending: false });
+      if (type) query = query.eq('type', type);
+      const res = await query;
+      if (res.error) throw res.error;
+      return (res.data || []).map(normalizeQuestion);
+    } catch (err) { return []; }
+  });
 }
 
 // ═══════════════════════════════════════════
@@ -446,30 +428,28 @@ export async function getQuestionsByChapter(chapterId, type = null) {
 // ═══════════════════════════════════════════
 export async function getSuggestionsByChapter(chapterId) {
   if (!chapterId) return [];
-  const cacheKey = 'suggestions_' + chapterId;
-  try {
-    const { data, error } = await supabase.from('suggestions').select('*')
-      .eq('chapter_id', chapterId).eq('is_active', true)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    if (data && data.length > 0) {
-      const normalized = data.map(normalizeSuggestion);
-      saveCache(cacheKey, normalized);
-      return normalized;
-    }
-    return getCache(cacheKey) || [];
-  } catch (err) { return getCache(cacheKey) || []; }
+  return cacheFirst("suggestions_" + chapterId, "suggestions_" + chapterId, async function () {
+    try {
+      const res = await supabase.from('suggestions').select('*')
+        .eq('chapter_id', chapterId).eq('is_active', true)
+        .order('created_at', { ascending: false });
+      if (res.error) throw res.error;
+      return (res.data || []).map(normalizeSuggestion);
+    } catch (err) { return []; }
+  });
 }
 
 export async function getSuggestionsBySubject(subjectId) {
   if (!subjectId) return [];
-  try {
-    const { data, error } = await supabase.from('suggestions').select('*')
-      .eq('subject_id', subjectId).eq('is_active', true)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return (data || []).map(normalizeSuggestion);
-  } catch (err) { return []; }
+  return cacheFirst("suggestions_subj_" + subjectId, "suggestions_subj_" + subjectId, async function () {
+    try {
+      const res = await supabase.from('suggestions').select('*')
+        .eq('subject_id', subjectId).eq('is_active', true)
+        .order('created_at', { ascending: false });
+      if (res.error) throw res.error;
+      return (res.data || []).map(normalizeSuggestion);
+    } catch (err) { return []; }
+  });
 }
 
 // ═══════════════════════════════════════════
@@ -477,19 +457,15 @@ export async function getSuggestionsBySubject(subjectId) {
 // ═══════════════════════════════════════════
 export async function getFormulasByChapter(chapterId) {
   if (!chapterId) return [];
-  const cacheKey = 'formulas_' + chapterId;
-  try {
-    const { data, error } = await supabase.from('formulas').select('*')
-      .eq('chapter_id', chapterId).eq('is_active', true)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    if (data && data.length > 0) {
-      const normalized = data.map(normalizeFormula);
-      saveCache(cacheKey, normalized);
-      return normalized;
-    }
-    return getCache(cacheKey) || [];
-  } catch (err) { return getCache(cacheKey) || []; }
+  return cacheFirst("formulas_" + chapterId, "formulas_" + chapterId, async function () {
+    try {
+      const res = await supabase.from('formulas').select('*')
+        .eq('chapter_id', chapterId).eq('is_active', true)
+        .order('created_at', { ascending: false });
+      if (res.error) throw res.error;
+      return (res.data || []).map(normalizeFormula);
+    } catch (err) { return []; }
+  });
 }
 
 // ═══════════════════════════════════════════
@@ -497,78 +473,75 @@ export async function getFormulasByChapter(chapterId) {
 // ═══════════════════════════════════════════
 export async function getPdfsByChapter(chapterId) {
   if (!chapterId) return [];
-  const cacheKey = 'pdfs_' + chapterId;
-  try {
-    const { data, error } = await supabase.from('pdfs').select('*')
-      .eq('chapter_id', chapterId).eq('is_active', true)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    if (data && data.length > 0) {
-      const normalized = data.map(normalizePdf);
-      saveCache(cacheKey, normalized);
-      return normalized;
-    }
-    return getCache(cacheKey) || [];
-  } catch (err) { return getCache(cacheKey) || []; }
+  return cacheFirst("pdfs_" + chapterId, "pdfs_" + chapterId, async function () {
+    try {
+      const res = await supabase.from('pdfs').select('*')
+        .eq('chapter_id', chapterId).eq('is_active', true)
+        .order('created_at', { ascending: false });
+      if (res.error) throw res.error;
+      return (res.data || []).map(normalizePdf);
+    } catch (err) { return []; }
+  });
 }
 
 export async function getPdfsBySubject(subjectId) {
   if (!subjectId) return [];
-  try {
-    const { data, error } = await supabase.from('pdfs').select('*')
-      .eq('subject_id', subjectId).eq('is_active', true)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return (data || []).map(normalizePdf);
-  } catch (err) { return []; }
+  return cacheFirst("pdfs_subj_" + subjectId, "pdfs_subj_" + subjectId, async function () {
+    try {
+      const res = await supabase.from('pdfs').select('*')
+        .eq('subject_id', subjectId).eq('is_active', true)
+        .order('created_at', { ascending: false });
+      if (res.error) throw res.error;
+      return (res.data || []).map(normalizePdf);
+    } catch (err) { return []; }
+  });
 }
 
 // ═══════════════════════════════════════════
 // NOTICES
 // ═══════════════════════════════════════════
-export async function getNotices(deptId = null) {
-  const cacheKey = "notices_" + (deptId || "all");
-  try {
-    const { data, error } = await supabase.from('notices').select('*')
-      .eq('is_active', true).eq('is_published', true)
-      .order('published_at', { ascending: false });
-    if (error) throw error;
-
-    let list = (data || []).map(normalizeNotice);
-
-    if (deptId) {
-      list = list.filter((n) => n.audience === "all" || n.departmentId === deptId);
-    } else {
-      list = list.filter((n) => n.audience === "all" || !n.departmentId);
-    }
-
-    if (list.length > 0) saveCache(cacheKey, list);
-    return list.length > 0 ? list : (getCache(cacheKey) || []);
-  } catch (err) { return getCache(cacheKey) || []; }
+export async function getNotices(deptId) {
+  const key = "notices_" + (deptId || "all");
+  return cacheFirst(key, key, async function () {
+    try {
+      const res = await supabase.from('notices').select('*')
+        .eq('is_active', true).eq('is_published', true)
+        .order('published_at', { ascending: false });
+      if (res.error) throw res.error;
+      let list = (res.data || []).map(normalizeNotice);
+      if (deptId) {
+        list = list.filter(function (n) { return n.audience === "all" || n.departmentId === deptId; });
+      } else {
+        list = list.filter(function (n) { return n.audience === "all" || !n.departmentId; });
+      }
+      return list;
+    } catch (err) { return []; }
+  });
 }
 
 // ═══════════════════════════════════════════
-// SEARCH (simple)
+// SEARCH
 // ═══════════════════════════════════════════
 export async function searchContent(query) {
   if (!query || query.length < 2) return [];
   const q = query.toLowerCase();
   try {
-    const { data: subData } = await supabase.from('subjects').select('*').eq('is_active', true)
-      .or(`name.ilike.%${q}%,bangla_name.ilike.%${q}%,code.ilike.%${q}%`).limit(5);
-    const { data: chData } = await supabase.from('chapters').select('*').eq('is_active', true)
-      .or(`name.ilike.%${q}%,name_en.ilike.%${q}%,category.ilike.%${q}%`).limit(8);
-
-    const results = [];
-    (subData || []).forEach((s) => results.push({
-      type: "subject", id: s.id, title: s.name, subtitle: s.code, icon: s.icon || "📚"
-    }));
-    (chData || []).forEach((c) => results.push({
-      type: "chapter", id: c.id, title: c.name, subtitle: c.category || "",
-      icon: c.icon || "📖", subjectId: c.subject_id
-    }));
-    return results;
+    const subP = supabase.from('subjects').select('*').eq('is_active', true)
+      .or('name.ilike.%' + q + '%,bangla_name.ilike.%' + q + '%,code.ilike.%' + q + '%').limit(5);
+    const chP = supabase.from('chapters').select('*').eq('is_active', true)
+      .or('name.ilike.%' + q + '%,name_en.ilike.%' + q + '%,category.ilike.%' + q + '%').limit(8);
+    const results = await Promise.all([subP, chP]);
+    const subData = results[0].data || [];
+    const chData = results[1].data || [];
+    const out = [];
+    subData.forEach(function (s) {
+      out.push({ type: "subject", id: s.id, title: s.name, subtitle: s.code, icon: s.icon || ICON_SUB });
+    });
+    chData.forEach(function (c) {
+      out.push({ type: "chapter", id: c.id, title: c.name, subtitle: c.category || "", icon: c.icon || ICON_CHAP, subjectId: c.subject_id });
+    });
+    return out;
   } catch (err) { return []; }
 }
 
-console.log('[User App] ✅ API Service loaded');
+console.log('[User App] API Service v5 loaded (cache-first)');
