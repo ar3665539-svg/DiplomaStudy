@@ -1,241 +1,249 @@
 /**
- * DiplomaStudy - Settings Page View
+ * Settings Page - App preferences
  */
 
 import { AppShell } from "../components/AppShell.js";
-import { state } from "../core/state.js";
-import { departments } from "../../data/departments.js";
-import { semesters } from "../../data/semesters.js";
-import { storage } from "../core/storage.js";
-import { Modal } from "../components/Modal.js";
+import { router } from "../core/router.js";
+import { storage, STORAGE_KEYS } from "../core/storage.js";
+import { getDepartments, getSubjects, clearAllCache } from "../services/api.js";
 import { Toast } from "../components/Toast.js";
-import { APP_CONFIG } from "../core/config.js";
-import { notificationService } from "../services/notificationService.js";
 
-export function renderSettings() {
+const THEME_KEY = "diplomastudy_theme";
+const APP_VERSION = "2.0.0";
+
+export async function renderSettings() {
   AppShell.updateHeader({
-    title: "Settings & Profile",
-    subtitle: "Preferences, backups & data",
+    title: "Settings",
+    subtitle: "App preferences",
     showBack: true,
-    showSearch: false
+    showSettings: false,
+    showTheme: false
   });
 
   const main = AppShell.getMainView();
   if (!main) return;
 
-  const currentSettings = {
-    name: state.userPreferences.name,
-    dept: state.selectedDepartment,
-    sem: state.selectedSemester,
-    dailyGoal: state.userPreferences.dailyGoalMinutes,
-    theme: state.theme
-  };
+  const settings = storage.get(STORAGE_KEYS.SETTINGS, {});
+  const theme = localStorage.getItem(THEME_KEY) || "light";
+
+  const departments = await getDepartments();
+  const curDeptId = settings.departmentId || settings.department || "";
+  const currentDept = departments.find((d) => d.id === curDeptId);
 
   main.innerHTML = `
-    <!-- User Profile Section -->
-    <div class="card mb-md p-md">
-      <div class="flex items-center gap-sm mb-md">
-        <div style="width: 44px; height: 44px; border-radius: 50%; background-color: var(--color-forest); color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px;">
-          ${currentSettings.name.charAt(0) || "S"}
-        </div>
-        <div>
-          <h3 class="text-sm font-bold text-forest">${currentSettings.name}</h3>
-          <span class="text-xs text-muted">Diploma-in-Engineering Student</span>
-        </div>
-      </div>
-
-      <div class="flex flex-col gap-sm">
-        <div>
-          <label class="text-xs font-bold text-muted block mb-xs">Your Name</label>
-          <input type="text" id="setting-user-name" class="search-input" value="${currentSettings.name}" />
-        </div>
-
-        <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-          <div>
-            <label class="text-xs font-bold text-muted block mb-xs">Technology</label>
-            <select id="setting-dept-select" class="search-input">
-              ${departments.map((d) => `
-                <option value="${d.id}" ${d.id === currentSettings.dept ? "selected" : ""}>${d.shortName}</option>
-              `).join("")}
-            </select>
+    <!-- Profile card -->
+    <div style="
+      padding:20px;
+      background:linear-gradient(135deg, #163524 0%, #1F4A32 100%);
+      border-radius:20px;
+      margin-bottom:20px;
+      box-shadow:0 12px 28px -8px rgba(28,62,44,0.3);
+      position:relative;
+      overflow:hidden;
+    ">
+      <div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,rgba(200,122,30,0.2),transparent 70%);"></div>
+      
+      <div style="position:relative;display:flex;align-items:center;gap:14px;">
+        <div style="
+          width:60px;height:60px;border-radius:18px;
+          background:rgba(255,255,255,0.15);
+          border:1.5px solid rgba(255,255,255,0.2);
+          display:flex;align-items:center;justify-content:center;
+          font-size:28px;
+          flex-shrink:0;
+        ">👤</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:16px;font-weight:900;color:#FFFFFF;letter-spacing:-0.3px;margin-bottom:2px;">
+            ${escapeHtml(settings.userName || "Student")}
           </div>
-
-          <div>
-            <label class="text-xs font-bold text-muted block mb-xs">Semester</label>
-            <select id="setting-sem-select" class="search-input">
-              ${semesters.map((s) => `
-                <option value="${s.id}" ${s.id === currentSettings.sem ? "selected" : ""}>${s.name}</option>
-              `).join("")}
-            </select>
+          <div style="font-size:12px;color:rgba(255,255,255,0.7);font-weight:600;">
+            ${currentDept ? `${currentDept.icon} ${currentDept.name}` : "No department"}
           </div>
         </div>
-
-        <div>
-          <label class="text-xs font-bold text-muted block mb-xs">Daily Study Target (Minutes)</label>
-          <input type="number" id="setting-daily-goal" class="search-input" value="${currentSettings.dailyGoal}" min="15" max="360" />
-        </div>
-
-        <button class="btn btn-primary btn-sm mt-xs" id="btn-save-profile">Save Profile Changes</button>
       </div>
     </div>
 
-    <!-- Appearance & App Preferences -->
-    <div class="card mb-md p-md">
-      <h3 class="text-sm font-bold text-forest mb-sm">Appearance & System</h3>
-
-      <div class="flex items-center justify-between py-sm" style="border-bottom: 1px solid var(--color-border);">
-        <div>
-          <span class="text-xs font-bold text-text block">Dark Theme</span>
-          <span class="text-xs text-muted">Reduced eye strain in night study</span>
-        </div>
-        <button class="btn btn-secondary btn-sm" id="btn-toggle-theme-setting">
-          ${currentSettings.theme === "dark" ? "🌙 Dark" : "☀️ Light"}
-        </button>
-      </div>
-
-      <div class="flex items-center justify-between py-sm" style="border-bottom: 1px solid var(--color-border);">
-        <div>
-          <span class="text-xs font-bold text-text block">Study Reminders</span>
-          <span class="text-xs text-muted">Daily goal & test notifications</span>
-        </div>
-        <button class="btn btn-secondary btn-sm" id="btn-enable-notifications">
-          Enable
-        </button>
-      </div>
-
-      <!-- PWA Install Prompt Trigger -->
-      <div class="flex items-center justify-between py-sm" id="pwa-install-row">
-        <div>
-          <span class="text-xs font-bold text-text block">Install DiplomaStudy PWA</span>
-          <span class="text-xs text-muted">Add to home screen for offline access</span>
-        </div>
-        <button class="btn btn-primary btn-sm" id="btn-pwa-install-app">
-          Install App
+    <!-- Appearance -->
+    <div style="margin-bottom:20px;">
+      <h3 style="font-size:11px;font-weight:800;color:#84968B;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px 4px;">Appearance</h3>
+      
+      <div style="background:#FFFFFF;border:1px solid #E1E8E1;border-radius:18px;overflow:hidden;">
+        <button class="settings-row" id="setting-theme" style="
+          width:100%;display:flex;align-items:center;gap:14px;
+          padding:16px;background:transparent;border:none;
+          cursor:pointer;font-family:inherit;text-align:left;
+        ">
+          <div style="width:42px;height:42px;border-radius:13px;background:#F2F5F2;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">
+            ${theme === "dark" ? "🌙" : "☀️"}
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13.5px;font-weight:800;color:#1C3E2C;margin-bottom:2px;">Dark Mode</div>
+            <div style="font-size:11px;color:#84968B;font-weight:600;">${theme === "dark" ? "চালু আছে" : "বন্ধ আছে"}</div>
+          </div>
+          <div style="
+            width:44px;height:24px;border-radius:999px;
+            background:${theme === "dark" ? "#1C3E2C" : "#E1E8E1"};
+            position:relative;transition:background 0.25s ease;flex-shrink:0;
+          ">
+            <div style="
+              position:absolute;top:2px;
+              left:${theme === "dark" ? "22px" : "2px"};
+              width:20px;height:20px;border-radius:50%;
+              background:#FFFFFF;
+              transition:left 0.25s cubic-bezier(0.34,1.56,0.64,1);
+              box-shadow:0 2px 4px rgba(0,0,0,0.15);
+            "></div>
+          </div>
         </button>
       </div>
     </div>
 
-    <!-- Data Management & Backups -->
-    <div class="card mb-md p-md">
-      <h3 class="text-sm font-bold text-forest mb-sm">Data & Backup</h3>
-      <p class="text-xs text-muted mb-sm">Export your bookmarks, study notes, planner tasks, and quiz scores into a JSON backup file.</p>
-
-      <div class="flex items-center gap-xs mb-sm">
-        <button class="btn btn-secondary btn-sm flex-1" id="btn-export-backup">
-          <span>Export Backup (JSON)</span>
+    <!-- Preferences -->
+    <div style="margin-bottom:20px;">
+      <h3 style="font-size:11px;font-weight:800;color:#84968B;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px 4px;">Preferences</h3>
+      
+      <div style="background:#FFFFFF;border:1px solid #E1E8E1;border-radius:18px;overflow:hidden;">
+        <button class="settings-row" id="setting-dept" style="
+          width:100%;display:flex;align-items:center;gap:14px;
+          padding:16px;background:transparent;border:none;
+          cursor:pointer;font-family:inherit;text-align:left;
+          border-bottom:1px solid #F2F5F2;
+        ">
+          <div style="width:42px;height:42px;border-radius:13px;background:#DCFCE7;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🏛️</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13.5px;font-weight:800;color:#1C3E2C;margin-bottom:2px;">Department</div>
+            <div style="font-size:11px;color:#84968B;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+              ${currentDept ? currentDept.name : "Select department"}
+            </div>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#84968B" stroke-width="2.5" stroke-linecap="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
         </button>
-        <button class="btn btn-secondary btn-sm flex-1" id="btn-import-trigger">
-          <span>Import Backup</span>
-        </button>
-        <input type="file" id="file-import-input" accept=".json" style="display: none;" />
-      </div>
 
-      <div class="pt-sm" style="border-top: 1px dashed var(--color-border);">
-        <button class="btn btn-secondary btn-sm btn-block text-danger" id="btn-reset-all-data">
-          Reset All App Data
+        <button class="settings-row" id="setting-name" style="
+          width:100%;display:flex;align-items:center;gap:14px;
+          padding:16px;background:transparent;border:none;
+          cursor:pointer;font-family:inherit;text-align:left;
+        ">
+          <div style="width:42px;height:42px;border-radius:13px;background:#DBEAFE;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">✏️</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13.5px;font-weight:800;color:#1C3E2C;margin-bottom:2px;">Your Name</div>
+            <div style="font-size:11px;color:#84968B;font-weight:600;">
+              ${escapeHtml(settings.userName || "Student")}
+            </div>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#84968B" stroke-width="2.5" stroke-linecap="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
         </button>
       </div>
     </div>
 
-    <!-- About & Board Disclaimer -->
-    <div class="card mb-xl p-md text-xs text-muted" style="line-height: 1.5;">
-      <h4 class="font-bold text-forest mb-xs">About DiplomaStudy v${APP_CONFIG.version}</h4>
-      <p class="mb-xs">Created for Diploma-in-Engineering polytechnic students across Bangladesh. Designed for offline readiness, fast access, and mobile-first revision.</p>
-      <p><strong>Disclaimer:</strong> This application is an independent educational aid and is not officially affiliated with or endorsed by Bangladesh Technical Education Board (BTEB).</p>
+    <!-- Storage & Data -->
+    <div style="margin-bottom:20px;">
+      <h3 style="font-size:11px;font-weight:800;color:#84968B;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px 4px;">Data</h3>
+      
+      <div style="background:#FFFFFF;border:1px solid #E1E8E1;border-radius:18px;overflow:hidden;">
+        <button class="settings-row" id="setting-refresh" style="
+          width:100%;display:flex;align-items:center;gap:14px;
+          padding:16px;background:transparent;border:none;
+          cursor:pointer;font-family:inherit;text-align:left;
+          border-bottom:1px solid #F2F5F2;
+        ">
+          <div style="width:42px;height:42px;border-radius:13px;background:#FEF3C7;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🔄</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13.5px;font-weight:800;color:#1C3E2C;margin-bottom:2px;">Refresh Data</div>
+            <div style="font-size:11px;color:#84968B;font-weight:600;">Server থেকে নতুন data আনুন</div>
+          </div>
+        </button>
+
+        <button class="settings-row" id="setting-clear" style="
+          width:100%;display:flex;align-items:center;gap:14px;
+          padding:16px;background:transparent;border:none;
+          cursor:pointer;font-family:inherit;text-align:left;
+        ">
+          <div style="width:42px;height:42px;border-radius:13px;background:#FEE2E2;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🗑️</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13.5px;font-weight:800;color:#991B1B;margin-bottom:2px;">Clear Cache</div>
+            <div style="font-size:11px;color:#84968B;font-weight:600;">Local storage থেকে temporary data</div>
+          </div>
+        </button>
+      </div>
     </div>
+
+    <!-- About -->
+    <div style="
+      text-align:center;
+      padding:24px 20px;
+      background:#FFFFFF;
+      border:1px solid #E1E8E1;
+      border-radius:18px;
+      margin-bottom:20px;
+    ">
+      <div style="font-size:36px;margin-bottom:8px;">🎓</div>
+      <div style="font-size:15px;font-weight:900;color:#1C3E2C;letter-spacing:-0.3px;margin-bottom:3px;">DiplomaStudy</div>
+      <div style="font-size:11.5px;color:#84968B;font-weight:600;margin-bottom:10px;">Version ${APP_VERSION}</div>
+      <div style="font-size:11px;color:#84968B;line-height:1.6;">
+        Made with ❤️ for Diploma Engineering students<br>
+        🇧🇩 Bangladesh
+      </div>
+    </div>
+
+    <div style="height:20px;"></div>
   `;
 
-  // Bind profile save
-  main.querySelector("#btn-save-profile")?.addEventListener("click", () => {
-    const name = main.querySelector("#setting-user-name")?.value || "";
-    const dept = main.querySelector("#setting-dept-select")?.value;
-    const sem = main.querySelector("#setting-sem-select")?.value;
-    const goal = main.querySelector("#setting-daily-goal")?.value;
+  // ═══ Bind ═══
+  // Theme toggle
+  main.querySelector("#setting-theme")?.addEventListener("click", () => {
+    const current = localStorage.getItem(THEME_KEY) || "light";
+    const next = current === "dark" ? "light" : "dark";
+    localStorage.setItem(THEME_KEY, next);
 
-    state.updateUserProfile(name, goal);
-    if (dept) state.setDepartment(dept);
-    if (sem) state.setSemester(sem);
+    const root = document.documentElement;
+    if (next === "dark") root.setAttribute("data-theme", "dark");
+    else root.removeAttribute("data-theme");
 
-    Toast.show("Profile preferences saved!", "success");
+    Toast.show(next === "dark" ? "🌙 Dark mode on" : "☀️ Light mode on", "success");
     renderSettings();
   });
 
-  // Bind Theme toggle
-  main.querySelector("#btn-toggle-theme-setting")?.addEventListener("click", () => {
-    state.toggleTheme();
-    renderSettings();
+  // Change department
+  main.querySelector("#setting-dept")?.addEventListener("click", () => {
+    router.navigate("#/onboarding");
   });
 
-  // Bind notifications
-  main.querySelector("#btn-enable-notifications")?.addEventListener("click", () => {
-    notificationService.requestPermission();
-  });
-
-  // Bind PWA Install button
-  const installBtn = main.querySelector("#btn-pwa-install-app");
-  installBtn?.addEventListener("click", () => {
-    if (window.deferredPWAInstallPrompt) {
-      window.deferredPWAInstallPrompt.prompt();
-      window.deferredPWAInstallPrompt.userChoice.then((choiceResult) => {
-        if (choiceResult.outcome === "accepted") {
-          Toast.show("DiplomaStudy installed to home screen!", "success");
-        }
-        window.deferredPWAInstallPrompt = null;
-      });
-    } else {
-      Toast.show("Open your browser menu and tap 'Add to Home screen'", "info");
+  // Edit name
+  main.querySelector("#setting-name")?.addEventListener("click", () => {
+    const current = settings.userName || "Student";
+    const name = prompt("আপনার নাম লিখুন:", current);
+    if (name && name.trim()) {
+      const ns = storage.get(STORAGE_KEYS.SETTINGS, {});
+      ns.userName = name.trim();
+      storage.set(STORAGE_KEYS.SETTINGS, ns);
+      Toast.show("✅ নাম আপডেট হয়েছে", "success");
+      renderSettings();
     }
   });
 
-  // Bind Export
-  main.querySelector("#btn-export-backup")?.addEventListener("click", () => {
-    const data = storage.exportAllData();
-    const blob = new Blob([data], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `DiplomaStudy_Backup_${new Date().toISOString().split("T")[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    Toast.show("Backup downloaded successfully!", "success");
+  // Refresh data
+  main.querySelector("#setting-refresh")?.addEventListener("click", () => {
+    clearAllCache();
+    Toast.show("🔄 Cache cleared, reloading...", "info");
+    setTimeout(() => window.location.reload(), 500);
   });
 
-  // Bind Import
-  const fileInput = main.querySelector("#file-import-input");
-  main.querySelector("#btn-import-trigger")?.addEventListener("click", () => {
-    fileInput?.click();
+  // Clear cache
+  main.querySelector("#setting-clear")?.addEventListener("click", () => {
+    if (!confirm("সব cached data মুছে ফেলবেন?\n\nএটা login info রাখবে, শুধু content cache clear করবে।")) return;
+    clearAllCache();
+    Toast.show("🗑️ Cache cleared", "success");
   });
+}
 
-  fileInput?.addEventListener("change", (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result;
-      const res = storage.importData(content);
-      if (res.success) {
-        Toast.show("Data imported successfully! Reloading...", "success");
-        setTimeout(() => window.location.reload(), 800);
-      } else {
-        Toast.show("Failed to import data: " + res.error, "error");
-      }
-    };
-    reader.readAsText(file);
-  });
-
-  // Bind Reset
-  main.querySelector("#btn-reset-all-data")?.addEventListener("click", () => {
-    Modal.show({
-      title: "Reset All App Data?",
-      bodyHtml: "<p class='text-xs text-danger'>This will erase all your local study notes, saved bookmarks, quiz scores, and planner routine. This cannot be reversed!</p>",
-      confirmText: "Yes, Reset Everything",
-      cancelText: "Cancel",
-      onConfirm: () => {
-        storage.clearAll();
-        Toast.show("All application data reset", "info");
-        setTimeout(() => window.location.reload(), 500);
-      }
-    });
-  });
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }

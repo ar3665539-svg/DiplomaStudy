@@ -3164,3 +3164,24 @@
 .home-hero-change-btn:active {
   transform: rotate(180deg) scale(0.95);
 }
+/* Force override for modern bottom nav */
+#bottom-nav.bottom-nav {
+  position: fixed !important;
+  bottom: 0 !important;
+  top: auto !important;
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+}
+
+#bottom-nav .bottom-nav-inner {
+  display: grid !important;
+  grid-template-columns: repeat(5, 1fr) !important;
+  width: 100%;
+}
+
+#bottom-nav .nav-item {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+}

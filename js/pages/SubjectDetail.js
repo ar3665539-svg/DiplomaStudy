@@ -1,212 +1,454 @@
 /**
  * DiplomaStudy - Subject Detail Page
- * Supabase থেকে chapters load করে
+ * Shows chapters from Supabase + content type actions
  */
 
 import { AppShell } from "../components/AppShell.js";
-import { CIVIL_DEPARTMENT } from "../../data/civilSubjects.js";
-import { EmptyState } from "../components/EmptyState.js";
 import { router } from "../core/router.js";
-import { getSubjectById, getChaptersBySubject } from "../services/api.js";
+import {
+  getSubjectById,
+  getChaptersBySubject,
+  getDepartments
+} from "../services/api.js";
+import { storage, STORAGE_KEYS } from "../core/storage.js";
 
 export async function renderSubjectDetail(params = {}) {
-  const subjectId = params.subjectId;
-
   AppShell.updateHeader({
     title: "Loading...",
-    showBack: true
+    subtitle: "",
+    showBack: true,
+    showSearch: false,
+    showTheme: true,
+    showSettings: false
   });
 
   const main = AppShell.getMainView();
   if (!main) return;
 
   main.innerHTML = `
-    <div style="text-align: center; padding: 60px 20px;">
+    <div style="text-align:center;padding:60px 20px;">
       <div class="spinner"></div>
-      <p style="margin-top: 12px; color: var(--color-text-muted); font-size: 13px;">Loading chapters...</p>
+      <p style="margin-top:12px;color:#84968B;font-size:13px;">Loading chapters...</p>
     </div>
   `;
 
+  // ═══ Get subjectId ═══
+  const urlParams = new URLSearchParams(window.location.hash.split("?")[1] || "");
+  const subjectId = params.subjectId || urlParams.get("subjectId") || "";
+
+  if (!subjectId) {
+    main.innerHTML = `
+      <div style="text-align:center;padding:60px 20px;">
+        <div style="font-size:56px;margin-bottom:16px;">❓</div>
+        <h2 style="font-size:17px;font-weight:800;color:#1C3E2C;margin:0 0 8px;">Subject নেই</h2>
+        <button id="goto-subjects" style="margin-top:12px;padding:12px 20px;border-radius:12px;border:none;background:linear-gradient(135deg,#1C3E2C,#2A5540);color:#FFFFFF;font-weight:800;font-size:13.5px;cursor:pointer;font-family:inherit;">
+          📚 Subjects এ যান
+        </button>
+      </div>
+    `;
+    main.querySelector("#goto-subjects")?.addEventListener("click", () => {
+      window.location.hash = "#/subjects";
+    });
+    return;
+  }
+
+  // ═══ Load data ═══
   let subject = null;
   let chapters = [];
+  let deptName = "";
 
   try {
     subject = await getSubjectById(subjectId);
-    if (subject) {
-      chapters = await getChaptersBySubject(subjectId);
-    }
-  } catch (err) {
-    console.error('[SubjectDetail] Load error:', err);
+  } catch (e) {
+    console.error("[SubjectDetail] Subject load failed:", e);
   }
+
+  if (subject) {
+    try {
+      chapters = await getChaptersBySubject(subjectId);
+    } catch (e) {
+      console.error("[SubjectDetail] Chapters load failed:", e);
+    }
+  }
+
+  // Get department name
+  try {
+    const settings = storage.get(STORAGE_KEYS.SETTINGS, {});
+    const deptId = settings.departmentId || settings.department || "";
+    if (deptId) {
+      const depts = await getDepartments();
+      const cur = depts.find((d) => d.id === deptId);
+      if (cur) deptName = cur.name;
+    }
+  } catch (e) {}
 
   if (!subject) {
     AppShell.updateHeader({
       title: "Subject Not Found",
-      showBack: true
+      showBack: true,
+      showTheme: true,
+      showSettings: false
     });
-    main.innerHTML = EmptyState.render({
-      icon: "❓",
-      title: "Subject Not Found",
-      banglaTitle: "বিষয় পাওয়া যায়নি",
-      message: "আপনি যে বিষয়ে খুঁজছেন সেটি এই semester এ নেই।",
-      showBadge: false
+    main.innerHTML = `
+      <div style="text-align:center;padding:60px 20px;">
+        <div style="font-size:56px;margin-bottom:16px;">❓</div>
+        <h2 style="font-size:17px;font-weight:800;color:#1C3E2C;margin:0 0 8px;">Subject পাওয়া যায়নি</h2>
+        <button id="goto-subjects" style="margin-top:12px;padding:12px 20px;border-radius:12px;border:none;background:linear-gradient(135deg,#1C3E2C,#2A5540);color:#FFFFFF;font-weight:800;font-size:13.5px;cursor:pointer;font-family:inherit;">
+          📚 Subjects এ যান
+        </button>
+      </div>
+    `;
+    main.querySelector("#goto-subjects")?.addEventListener("click", () => {
+      window.location.hash = "#/subjects";
     });
     return;
   }
 
   AppShell.updateHeader({
     title: subject.name,
-    subtitle: `${CIVIL_DEPARTMENT.shortName} • 1st Semester`,
-    showBack: true
+    subtitle: deptName,
+    showBack: true,
+    showSearch: false,
+    showTheme: true,
+    showSettings: false
   });
 
   const hasChapters = chapters.length > 0;
 
+  // ═══ Category grouping ═══
+  const categoryMap = {};
+  chapters.forEach((c) => {
+    const key = c.category || "__uncategorized__";
+    if (!categoryMap[key]) categoryMap[key] = [];
+    categoryMap[key].push(c);
+  });
+
+  const categoryKeys = Object.keys(categoryMap).sort((a, b) => {
+    if (a === "__uncategorized__") return 1;
+    if (b === "__uncategorized__") return -1;
+    return a.localeCompare(b);
+  });
+
+  const hasCategories = categoryKeys.filter((k) => k !== "__uncategorized__").length > 0;
+
+  const catEmojis = {
+    "গদ্য": "📖", "পদ্য": "🎭", "উপন্যাস": "📕", "নাটক": "🎬",
+    "প্রবন্ধ": "📝", "গল্প": "📗", "কবিতা": "✒️", "জীবনী": "👤",
+    "অনুবাদ": "🔄", "ব্যাকরণ": "📐", "সাহিত্য": "📚",
+    "Prose": "📖", "Poetry": "🎭", "Novel": "📕", "Drama": "🎬",
+    "Essay": "📝", "Short Story": "📗", "Grammar": "📐",
+    "বীজগণিত": "🔢", "জ্যামিতি": "📐", "ত্রিকোণমিতি": "📊",
+    "ক্যালকুলাস": "∫", "পরিসংখ্যান": "📈", "সমীকরণ": "⚖️",
+    "মেকানিক্স": "⚙️", "তাপ": "🌡️", "শব্দ": "🔊", "আলো": "💡",
+    "বিদ্যুৎ": "⚡", "চুম্বক": "🧲",
+    "থিওরি": "📖", "ড্রয়িং": "✏️", "প্র্যাকটিক্যাল": "🔧",
+    "সার্ভে": "📐", "ম্যাটেরিয়াল": "🧱", "স্ট্রাকচার": "🏗️",
+    "__uncategorized__": "📄"
+  };
+
+  // ═══ RENDER ═══
   main.innerHTML = `
-    <div class="subject-hero-compact">
-      <div class="shc-icon">${subject.icon}</div>
-      <div class="shc-info">
-        <h2 class="shc-name">${subject.name}</h2>
-        <p class="shc-bangla">${subject.banglaName}</p>
-        <div class="shc-meta">
-          <span class="shc-chip">${subject.code}</span>
-          <span class="shc-chip shc-chip-type">${subject.type}</span>
-          <span class="shc-chip shc-chip-credit">${subject.credits} cr</span>
+    <!-- Subject hero -->
+    <div style="
+      padding:18px;
+      background:linear-gradient(135deg, rgba(28,62,44,0.08), transparent);
+      border-left:4px solid #1C3E2C;
+      border-radius:16px;
+      margin-bottom:18px;
+    ">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div style="
+          width:56px;height:56px;border-radius:16px;
+          background:linear-gradient(135deg,#DCFCE7,#BBF7D0);
+          display:flex;align-items:center;justify-content:center;
+          font-size:28px;flex-shrink:0;
+          box-shadow:0 4px 12px rgba(16,185,129,0.15);
+        ">${subject.icon || "📘"}</div>
+        <div style="flex:1;min-width:0;">
+          <h2 style="font-size:17px;font-weight:900;color:#1C3E2C;letter-spacing:-0.3px;margin:0 0 3px;">
+            ${escapeHtml(subject.name)}
+          </h2>
+          ${subject.banglaName ? `
+            <p style="font-size:12px;color:#84968B;font-weight:600;margin:0 0 6px;">
+              ${escapeHtml(subject.banglaName)}
+            </p>
+          ` : ""}
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            ${subject.code ? `<span style="font-size:9.5px;font-weight:800;color:#065F46;background:#DCFCE7;padding:3px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:0.3px;">${escapeHtml(subject.code)}</span>` : ""}
+            ${subject.type ? `<span style="font-size:9.5px;font-weight:800;color:#57675D;background:#F2F5F2;padding:3px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:0.3px;">${escapeHtml(subject.type)}</span>` : ""}
+            ${subject.credits ? `<span style="font-size:9.5px;font-weight:800;color:#C87A1E;background:#FEF3C7;padding:3px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:0.3px;">${subject.credits} CR</span>` : ""}
+          </div>
         </div>
       </div>
     </div>
 
+    <!-- Chapters -->
     ${hasChapters ? `
-      <div class="chapters-meta-bar">
-        <div class="cmb-left">
-          <span class="cmb-icon">📚</span>
-          <span class="cmb-text">মোট <strong>${chapters.length}টি</strong> অধ্যায়</span>
+      <div style="
+        display:flex;align-items:center;justify-content:space-between;
+        padding:12px 14px;
+        background:linear-gradient(135deg, rgba(28,62,44,0.06), transparent);
+        border-radius:12px;
+        margin-bottom:14px;
+      ">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:16px;">📖</span>
+          <span style="font-size:13px;font-weight:700;color:#57675D;">
+            মোট <strong style="color:#1C3E2C;font-weight:900;">${chapters.length}</strong>টি অধ্যায়
+          </span>
         </div>
-        <div class="cmb-right">
-          <span class="cmb-hint">ট্যাপ করে খুলুন</span>
-        </div>
+        <span style="font-size:11px;color:#84968B;font-weight:600;">ট্যাপ করে খুলুন →</span>
       </div>
 
-      <div class="chapters-accordion" id="chapters-accordion">
-        ${chapters.map((ch) => `
-          <div class="chapter-item" data-chapter-id="${ch.id}" data-chapter-name="${ch.name}">
-            <button class="chapter-header" aria-expanded="false" aria-controls="chapter-body-${ch.id}" data-chapter-toggle="${ch.id}">
-              <div class="ch-number-pill">${ch.number}</div>
-              <div class="ch-header-text">
-                <span class="ch-title-bn">${ch.name}</span>
-                <span class="ch-title-en">${ch.nameEn}</span>
-              </div>
-              <div class="ch-chevron">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-              </div>
-            </button>
+      ${categoryKeys.map((catKey) => {
+        const catChapters = categoryMap[catKey];
+        const label = catKey === "__uncategorized__" ? "Other" : catKey;
+        const emoji = catEmojis[catKey] || "📄";
 
-            <div class="chapter-body" id="chapter-body-${ch.id}" data-chapter-body="${ch.id}" style="max-height: 0; overflow: hidden; transition: max-height 0.3s ease;">
-              <div class="ch-body-inner">
-                <div class="ch-body-heading">
-                  <span class="cbh-icon">📝</span>
-                  <span class="cbh-text">Content দেখতে ট্যাপ করুন</span>
+        return `
+          <div style="margin-bottom:16px;">
+            ${hasCategories ? `
+              <div style="
+                display:flex;align-items:center;gap:8px;
+                margin:0 0 10px 4px;
+              ">
+                <span style="font-size:16px;">${emoji}</span>
+                <span style="font-size:13px;font-weight:800;color:#1C3E2C;">${escapeHtml(label)}</span>
+                <span style="
+                  font-size:10.5px;font-weight:800;color:#84968B;
+                  background:#F2F5F2;padding:2px 8px;border-radius:999px;
+                ">${catChapters.length}</span>
+              </div>
+            ` : ""}
+
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              ${catChapters.map((ch) => `
+                <div 
+                  class="chapter-item"
+                  data-chapter-id="${ch.id}"
+                  style="
+                    background:#FFFFFF;
+                    border:1.5px solid #E1E8E1;
+                    border-radius:14px;
+                    overflow:hidden;
+                    transition:all 0.2s ease;
+                  "
+                >
+                  <button 
+                    class="chapter-header"
+                    data-toggle="${ch.id}"
+                    type="button"
+                    style="
+                      width:100%;
+                      display:flex;align-items:center;gap:12px;
+                      padding:14px;
+                      background:transparent;
+                      border:none;
+                      cursor:pointer;
+                      font-family:inherit;
+                      text-align:left;
+                      -webkit-tap-highlight-color:transparent;
+                    "
+                  >
+                    <div style="
+                      min-width:38px;height:38px;
+                      padding:0 8px;
+                      border-radius:10px;
+                      background:linear-gradient(135deg,#DCFCE7,#BBF7D0);
+                      display:flex;align-items:center;justify-content:center;
+                      font-size:13px;font-weight:900;
+                      color:#065F46;
+                      font-family:ui-monospace,monospace;
+                      flex-shrink:0;
+                    ">${ch.number}</div>
+
+                    <div style="flex:1;min-width:0;">
+                      <div style="
+                        font-size:13.5px;font-weight:800;
+                        color:#1C3E2C;letter-spacing:-0.2px;
+                        line-height:1.3;margin-bottom:3px;
+                      ">${escapeHtml(ch.name)}</div>
+                      ${ch.nameEn ? `
+                        <div style="
+                          font-size:10.5px;color:#84968B;
+                          font-weight:500;font-style:italic;
+                          line-height:1.25;
+                        ">${escapeHtml(ch.nameEn)}</div>
+                      ` : ""}
+                    </div>
+
+                    <div class="chevron" style="
+                      width:28px;height:28px;border-radius:50%;
+                      background:#F2F5F2;color:#57675D;
+                      display:flex;align-items:center;justify-content:center;
+                      flex-shrink:0;
+                      transition:all 0.25s cubic-bezier(0.34,1.56,0.64,1);
+                    ">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </div>
+                  </button>
+
+                  <div 
+                    class="chapter-body"
+                    data-body="${ch.id}"
+                    style="
+                      max-height:0;
+                      overflow:hidden;
+                      transition:max-height 0.3s cubic-bezier(0.34,1.2,0.64,1);
+                    "
+                  >
+                    <div style="
+                      padding:12px 14px 14px;
+                      border-top:1px dashed #E1E8E1;
+                    ">
+                      <div style="
+                        font-size:11px;font-weight:700;
+                        color:#57675D;text-transform:uppercase;
+                        letter-spacing:0.5px;margin-bottom:10px;
+                      ">📝 Content দেখতে ট্যাপ করুন</div>
+
+                      <div style="
+                        display:grid;
+                        grid-template-columns:repeat(3,1fr);
+                        gap:6px;
+                      ">
+                        ${contentBtn("pdf", "📄", "PDF", "rose", ch, subjectId)}
+                        ${contentBtn("creative", "📝", "রচনামূলক", "forest", ch, subjectId)}
+                        ${contentBtn("short", "📄", "সংক্ষিপ্ত", "accent", ch, subjectId)}
+                        ${contentBtn("mcq", "⚡", "MCQ", "indigo", ch, subjectId)}
+                        ${contentBtn("suggestion", "💡", "সাজেশন", "purple", ch, subjectId)}
+                        ${contentBtn("formula", "🧮", "সূত্রাবলী", "cyan", ch, subjectId)}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-
-                <div class="ch-actions-grid">
-                  <button class="ch-action-btn ch-action-pdf" data-content="pdf" data-chapter-id="${ch.id}" data-chapter-number="${ch.number}" data-subject-id="${subjectId}">
-                    <span class="cha-icon">📄</span>
-                    <span class="cha-label">PDF</span>
-                    <span class="cha-sub">বই/নোট</span>
-                  </button>
-
-                  <button class="ch-action-btn ch-action-creative" data-content="creative" data-chapter-id="${ch.id}" data-chapter-number="${ch.number}" data-subject-id="${subjectId}">
-                    <span class="cha-icon">📝</span>
-                    <span class="cha-label">রচনামূলক</span>
-                    <span class="cha-sub">বড় প্রশ্ন</span>
-                  </button>
-
-                  <button class="ch-action-btn ch-action-short" data-content="short" data-chapter-id="${ch.id}" data-chapter-number="${ch.number}" data-subject-id="${subjectId}">
-                    <span class="cha-icon">📄</span>
-                    <span class="cha-label">সংক্ষিপ্ত</span>
-                    <span class="cha-sub">ছোট প্রশ্ন</span>
-                  </button>
-
-                  <button class="ch-action-btn ch-action-mcq" data-content="mcq" data-chapter-id="${ch.id}" data-chapter-number="${ch.number}" data-subject-id="${subjectId}">
-                    <span class="cha-icon">⚡</span>
-                    <span class="cha-label">অতি সংক্ষিপ্ত</span>
-                    <span class="cha-sub">MCQ</span>
-                  </button>
-
-                  <button class="ch-action-btn ch-action-suggestion" data-content="suggestion" data-chapter-id="${ch.id}" data-chapter-number="${ch.number}" data-subject-id="${subjectId}">
-                    <span class="cha-icon">💡</span>
-                    <span class="cha-label">সাজেশন</span>
-                    <span class="cha-sub">গুরুত্বপূর্ণ</span>
-                  </button>
-
-                  <button class="ch-action-btn ch-action-formula" data-content="formula" data-chapter-id="${ch.id}" data-chapter-number="${ch.number}" data-subject-id="${subjectId}">
-                    <span class="cha-icon">📐</span>
-                    <span class="cha-label">সূত্রাবলী</span>
-                    <span class="cha-sub">Formulas</span>
-                  </button>
-                </div>
-              </div>
+              `).join("")}
             </div>
           </div>
-        `).join("")}
-      </div>
+        `;
+      }).join("")}
     ` : `
-      ${EmptyState.render({
-        icon: "📚",
-        title: "Chapters Coming Soon",
-        banglaTitle: "চ্যাপ্টার শীঘ্রই আসছে",
-        message: "Server থেকে এই বিষয়ের chapter content যুক্ত করা হলে এখানে দেখা যাবে।"
-      })}
+      <div style="
+        text-align:center;padding:48px 24px;
+        background:#FFFFFF;
+        border:1.5px dashed #E1E8E1;
+        border-radius:20px;
+        margin-bottom:20px;
+      ">
+        <div style="font-size:56px;margin-bottom:12px;opacity:0.8;">📚</div>
+        <h3 style="font-size:15px;font-weight:800;color:#1C3E2C;margin:0 0 6px;">কোনো অধ্যায় নেই</h3>
+        <p style="font-size:12px;color:#84968B;line-height:1.6;max-width:280px;margin:0 auto;">
+          এই subject-এ এখনো কোনো chapter যোগ করা হয়নি।
+        </p>
+      </div>
     `}
 
-    <div style="height: 20px;"></div>
+    <div style="height:20px;"></div>
   `;
 
-  main.querySelectorAll("[data-chapter-toggle]").forEach((btn) => {
+  // ═══ Bind: accordion toggle ═══
+  main.querySelectorAll("[data-toggle]").forEach((btn) => {
     btn.addEventListener("click", (e) => {
+      e.preventDefault();
       e.stopPropagation();
-      const chapterId = btn.getAttribute("data-chapter-toggle");
-      const body = main.querySelector(`[data-chapter-body="${chapterId}"]`);
-      const isExpanded = btn.getAttribute("aria-expanded") === "true";
 
-      main.querySelectorAll("[data-chapter-toggle]").forEach((otherBtn) => {
-        if (otherBtn !== btn) {
-          otherBtn.setAttribute("aria-expanded", "false");
-          const otherId = otherBtn.getAttribute("data-chapter-toggle");
-          const otherBody = main.querySelector(`[data-chapter-body="${otherId}"]`);
-          if (otherBody) {
-            otherBody.style.maxHeight = "0";
-            otherBody.classList.remove("open");
-          }
-          otherBtn.closest(".chapter-item")?.classList.remove("expanded");
+      const chId = btn.getAttribute("data-toggle");
+      const body = main.querySelector(`[data-body="${chId}"]`);
+      const item = btn.closest(".chapter-item");
+      const chevron = btn.querySelector(".chevron");
+      const isOpen = body.style.maxHeight && body.style.maxHeight !== "0px";
+
+      // Close others
+      main.querySelectorAll(".chapter-body").forEach((b) => {
+        if (b !== body) {
+          b.style.maxHeight = "0";
+          const otherItem = b.closest(".chapter-item");
+          otherItem?.querySelector(".chevron")?.style.setProperty("transform", "");
+          otherItem?.style.setProperty("border-color", "#E1E8E1");
         }
       });
 
-      if (isExpanded) {
-        btn.setAttribute("aria-expanded", "false");
+      if (isOpen) {
         body.style.maxHeight = "0";
-        body.classList.remove("open");
-        btn.closest(".chapter-item")?.classList.remove("expanded");
+        if (chevron) chevron.style.transform = "";
+        if (item) item.style.borderColor = "#E1E8E1";
       } else {
-        btn.setAttribute("aria-expanded", "true");
-        body.classList.add("open");
         body.style.maxHeight = body.scrollHeight + "px";
-        btn.closest(".chapter-item")?.classList.add("expanded");
+        if (chevron) chevron.style.transform = "rotate(180deg)";
+        if (item) item.style.borderColor = "#1C3E2C";
       }
     });
   });
 
+  // ═══ Bind: content type buttons ═══
   main.querySelectorAll("[data-content]").forEach((btn) => {
     btn.addEventListener("click", (e) => {
+      e.preventDefault();
       e.stopPropagation();
-      const content = btn.getAttribute("data-content");
+
+      const type = btn.getAttribute("data-content");
       const chapterId = btn.getAttribute("data-chapter-id");
       const chapterNumber = btn.getAttribute("data-chapter-number");
       const subId = btn.getAttribute("data-subject-id");
 
-      router.navigate(`#/content?type=${content}&subjectId=${subId}&chapterId=${chapterId}&chapterNumber=${chapterNumber}`);
+      console.log("[SubjectDetail] Content nav:", { type, chapterId, subId });
+
+      window.location.hash = `#/content?type=${type}&subjectId=${subId}&chapterId=${chapterId}&chapterNumber=${chapterNumber}`;
     });
   });
+}
+
+// ═══════════════════════════════════════════
+// CONTENT BUTTON HELPER
+// ═══════════════════════════════════════════
+function contentBtn(type, icon, label, colorSet, chapter, subjectId) {
+  const colors = {
+    pdf:        { bg: "#FEE2E2", fg: "#991B1B" },
+    creative:   { bg: "#DCFCE7", fg: "#065F46" },
+    short:      { bg: "#FEF3C7", fg: "#92400E" },
+    mcq:        { bg: "#E0E7FF", fg: "#3730A3" },
+    suggestion: { bg: "#F3E8FF", fg: "#6B21A8" },
+    formula:    { bg: "#CFFAFE", fg: "#155E75" }
+  };
+  const c = colors[colorSet] || colors.forest;
+
+  return `
+    <button 
+      data-content="${type}"
+      data-chapter-id="${chapter.id}"
+      data-chapter-number="${chapter.number}"
+      data-subject-id="${subjectId}"
+      type="button"
+      style="
+        display:flex;flex-direction:column;align-items:center;gap:4px;
+        padding:10px 4px 8px;
+        background:${c.bg};
+        border:1px solid ${c.fg}20;
+        border-radius:11px;
+        cursor:pointer;
+        font-family:inherit;
+        transition:all 0.15s cubic-bezier(0.34,1.56,0.64,1);
+        -webkit-tap-highlight-color:transparent;
+      "
+    >
+      <span style="font-size:18px;line-height:1;">${icon}</span>
+      <span style="
+        font-size:10px;font-weight:800;
+        color:${c.fg};letter-spacing:-0.1px;
+        line-height:1.1;text-align:center;
+      ">${label}</span>
+    </button>
+  `;
+}
+
+// ═══════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }

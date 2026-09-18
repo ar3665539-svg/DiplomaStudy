@@ -1,148 +1,211 @@
 /**
- * DiplomaStudy - Engineering Formulas Bank Page View
+ * DiplomaStudy - Formulas Page (DB-driven ONLY)
+ * Fetches from server, no hardcoded data
  */
 
 import { AppShell } from "../components/AppShell.js";
-import { formulas } from "../../data/formulas.js";
-import { bookmarkService } from "../features/bookmark/bookmarkService.js";
-import { SearchBar } from "../components/SearchBar.js";
+import {
+  getSubjects,
+  getChaptersBySubject,
+  getFormulasByChapter
+} from "../services/api.js";
 
-export function renderFormula() {
+export async function renderFormula() {
   AppShell.updateHeader({
     title: "Engineering Formulas",
     subtitle: "Equations, variables & units",
     showBack: true,
-    showSearch: true
+    showSearch: false,
+    showTheme: true,
+    showSettings: false
   });
 
   const main = AppShell.getMainView();
   if (!main) return;
 
-  const categories = [
-    "All",
-    "Electrical Engineering",
-    "Civil Engineering",
-    "Mechanical Engineering",
-    "Mathematics",
-    "Physics"
-  ];
-
-  let activeCat = "All";
-  let searchQuery = "";
-
-  const renderFormulaCards = () => {
-    const container = main.querySelector("#formula-list-container");
-    if (!container) return;
-
-    let filtered = formulas;
-    if (activeCat !== "All") {
-      filtered = filtered.filter((f) => f.category === activeCat);
-    }
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter((f) =>
-        f.name.toLowerCase().includes(q) ||
-        (f.banglaName && f.banglaName.toLowerCase().includes(q)) ||
-        f.formula.toLowerCase().includes(q) ||
-        f.explanation.toLowerCase().includes(q)
-      );
-    }
-
-    if (filtered.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">📐</div>
-          <h2 class="empty-state-title">No Formulas Found</h2>
-          <p class="empty-state-desc">Try clearing the search query or select another engineering discipline.</p>
-        </div>
-      `;
-      return;
-    }
-
-    container.innerHTML = filtered.map((f) => {
-      const isBookmarked = bookmarkService.isBookmarked("formulas", f.id);
-      return `
-        <div class="card mb-md p-md formula-card" data-id="${f.id}" id="form-card-${f.id}">
-          <div class="flex items-start justify-between mb-xs">
-            <div>
-              <span class="badge badge-forest mb-xs">${f.category}</span>
-              <h3 class="text-sm font-bold text-forest">${f.name}</h3>
-              ${f.banglaName ? `<span class="text-xs text-muted">(${f.banglaName})</span>` : ""}
-            </div>
-            <button class="header-icon-btn btn-bookmark-formula" data-id="${f.id}" aria-label="Bookmark formula">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="${isBookmarked ? "var(--color-accent)" : "none"}" stroke="${isBookmarked ? "var(--color-accent)" : "currentColor"}" stroke-width="2">
-                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
-              </svg>
-            </button>
-          </div>
-
-          <!-- Formula Code Block -->
-          <div class="p-sm my-xs" style="background-color: var(--color-surface-hover); border-radius: var(--radius-sm); border-left: 3px solid var(--color-forest);">
-            <code class="text-sm font-bold text-forest" style="font-size: 15px;">${f.formula}</code>
-          </div>
-
-          <div class="text-xs text-muted mb-xs" style="line-height: 1.4;">
-            <strong>Variables:</strong> ${f.variables}
-          </div>
-
-          <div class="text-xs text-muted mb-xs" style="line-height: 1.4;">
-            <strong>Units:</strong> <span class="badge badge-sage" style="font-size: 11px;">${f.units}</span>
-          </div>
-
-          <p class="text-xs text-text mb-xs" style="line-height: 1.4;">${f.explanation}</p>
-
-          ${f.example ? `
-            <div class="p-xs mt-xs text-xs" style="background-color: var(--color-forest-soft); border-radius: var(--radius-xs); line-height: 1.4;">
-              <strong class="text-forest">Example:</strong> ${f.example}
-            </div>
-          ` : ""}
-        </div>
-      `;
-    }).join("");
-
-    container.querySelectorAll(".btn-bookmark-formula").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-id");
-        const added = bookmarkService.toggle("formulas", id);
-        const svg = btn.querySelector("svg");
-        if (svg) {
-          svg.setAttribute("fill", added ? "var(--color-accent)" : "none");
-          svg.setAttribute("stroke", added ? "var(--color-accent)" : "currentColor");
-        }
-      });
-    });
-  };
-
   main.innerHTML = `
-    <div class="mb-sm">
-      ${SearchBar.render({ placeholder: "Search formulas by name, equation...", id: "formula-search-input" })}
+    <div style="text-align:center;padding:60px 20px;">
+      <div class="spinner"></div>
+      <p style="margin-top:12px;color:#84968B;font-size:13px;">Loading formulas...</p>
     </div>
+  `;
 
-    <!-- Category Chips -->
-    <div class="flex items-center gap-xs overflow-x-auto pb-xs mb-md" id="formula-category-chips" style="scrollbar-width: none;">
-      ${categories.map((c) => `
-        <button class="badge ${c === "All" ? "badge-forest active" : "badge-sage"} f-cat-chip" data-cat="${c}">${c}</button>
+  // ═══ Load all formulas from server ═══
+  let allFormulas = [];
+  let subjectsMap = {}; // subjectId → subject object
+
+  try {
+    const subjects = await getSubjects();
+    subjects.forEach((s) => { subjectsMap[s.id] = s; });
+
+    // For each subject, load its chapters, then fetch formulas
+    for (const subject of subjects) {
+      try {
+        const chapters = await getChaptersBySubject(subject.id);
+        for (const ch of chapters) {
+          try {
+            const formulas = await getFormulasByChapter(ch.id);
+            formulas.forEach((f) => {
+              allFormulas.push({
+                ...f,
+                chapterName: ch.name,
+                chapterNumber: ch.number,
+                subjectName: subject.name,
+                subjectId: subject.id
+              });
+            });
+          } catch (e) {}
+        }
+      } catch (e) {}
+    }
+  } catch (err) {
+    console.error("[Formula] Load error:", err);
+  }
+
+  console.log(`[Formula] Loaded ${allFormulas.length} formulas from server`);
+
+  // ═══ If no formulas — empty state ═══
+  if (allFormulas.length === 0) {
+    main.innerHTML = `
+      <div style="text-align:center;padding:60px 24px;">
+        <div style="font-size:64px;margin-bottom:16px;">🧮</div>
+        <h2 style="font-size:17px;font-weight:800;color:#1C3E2C;margin:0 0 8px;">কোনো সূত্র নেই</h2>
+        <p style="font-size:13px;color:#84968B;line-height:1.6;max-width:300px;margin:0 auto 20px;">
+          Admin Panel থেকে formula যোগ করলে এখানে দেখা যাবে।
+        </p>
+        <button id="goto-home" style="
+          padding:12px 22px;border-radius:12px;border:none;
+          background:linear-gradient(135deg,#1C3E2C,#2A5540);
+          color:#FFFFFF;font-weight:800;font-size:13.5px;
+          cursor:pointer;font-family:inherit;
+        ">🏠 Home এ যান</button>
+      </div>
+    `;
+    main.querySelector("#goto-home")?.addEventListener("click", () => {
+      window.location.hash = "#/home";
+    });
+    return;
+  }
+
+  // ═══ Group by subject ═══
+  const bySubject = {};
+  allFormulas.forEach((f) => {
+    if (!bySubject[f.subjectId]) {
+      bySubject[f.subjectId] = {
+        subject: subjectsMap[f.subjectId] || { name: f.subjectName || "Unknown", icon: "📘" },
+        formulas: []
+      };
+    }
+    bySubject[f.subjectId].formulas.push(f);
+  });
+
+  // ═══ Render ═══
+  main.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:20px;">
+      ${Object.values(bySubject).map(({ subject, formulas }) => `
+        <div>
+          <div style="
+            display:flex;align-items:center;gap:10px;
+            padding:10px 12px;
+            background:linear-gradient(135deg, rgba(28,62,44,0.06), transparent);
+            border-left:3px solid #1C3E2C;
+            border-radius:10px;
+            margin-bottom:10px;
+          ">
+            <span style="font-size:20px;">${subject.icon || "📘"}</span>
+            <span style="font-size:13.5px;font-weight:800;color:#1C3E2C;flex:1;">
+              ${escapeHtml(subject.name)}
+            </span>
+            <span style="
+              font-size:10.5px;font-weight:800;color:#065F46;
+              background:#DCFCE7;padding:3px 9px;border-radius:999px;
+            ">${formulas.length}</span>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            ${formulas.map((f) => `
+              <div style="
+                padding:16px;
+                background:#FFFFFF;
+                border:1.5px solid #E1E8E1;
+                border-radius:16px;
+                box-shadow:0 2px 8px rgba(28,62,44,0.04);
+              ">
+                <div style="
+                  display:flex;align-items:center;gap:6px;
+                  font-size:11px;color:#84968B;font-weight:600;
+                  margin-bottom:8px;
+                ">
+                  <span style="
+                    font-size:10px;font-weight:800;
+                    color:#065F46;background:#DCFCE7;
+                    padding:2px 8px;border-radius:6px;
+                  ">Ch. ${f.chapterNumber}</span>
+                  <span>${escapeHtml(f.chapterName || "")}</span>
+                </div>
+
+                <h3 style="
+                  font-size:15px;font-weight:800;
+                  color:#1C3E2C;letter-spacing:-0.2px;
+                  margin:0 0 10px;
+                ">${escapeHtml(f.name || "")}</h3>
+
+                ${f.equation ? `
+                  <div style="
+                    padding:14px;
+                    background:linear-gradient(135deg, #CFFAFE, #E0F2FE);
+                    border-left:4px solid #0891B2;
+                    border-radius:10px;
+                    margin-bottom:12px;
+                    text-align:center;
+                  ">
+                    <code style="
+                      font-family:ui-monospace,monospace;
+                      font-size:15px;font-weight:800;
+                      color:#0E7490;letter-spacing:0.5px;
+                    ">${escapeHtml(f.equation)}</code>
+                  </div>
+                ` : ""}
+
+                ${f.explanation ? `
+                  <p style="
+                    font-size:13px;color:#57675D;
+                    line-height:1.6;margin:0 0 10px;
+                  ">${escapeHtml(f.explanation)}</p>
+                ` : ""}
+
+                ${f.example ? `
+                  <div style="
+                    padding:10px 12px;
+                    background:#F8FBF8;
+                    border-left:3px solid #E1E8E1;
+                    border-radius:8px;
+                  ">
+                    <div style="
+                      font-size:10px;font-weight:800;
+                      color:#84968B;text-transform:uppercase;
+                      letter-spacing:0.5px;margin-bottom:4px;
+                    ">উদাহরণ</div>
+                    <div style="
+                      font-size:12.5px;color:#1C3E2C;
+                      line-height:1.5;font-weight:500;
+                    ">${escapeHtml(f.example)}</div>
+                  </div>
+                ` : ""}
+              </div>
+            `).join("")}
+          </div>
+        </div>
       `).join("")}
     </div>
 
-    <div id="formula-list-container"></div>
+    <div style="height:20px;"></div>
   `;
+}
 
-  main.querySelectorAll(".f-cat-chip").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      main.querySelectorAll(".f-cat-chip").forEach((c) => c.classList.remove("badge-forest", "active"));
-      main.querySelectorAll(".f-cat-chip").forEach((c) => c.classList.add("badge-sage"));
-      chip.classList.remove("badge-sage");
-      chip.classList.add("badge-forest", "active");
-      activeCat = chip.getAttribute("data-cat");
-      renderFormulaCards();
-    });
-  });
-
-  SearchBar.bindEvents(main, (q) => {
-    searchQuery = q.trim();
-    renderFormulaCards();
-  }, "formula-search-input");
-
-  renderFormulaCards();
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }

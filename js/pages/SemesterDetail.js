@@ -1,191 +1,290 @@
 /**
- * DiplomaStudy - Semester Detail Page
- * একটা semester এ কি কি book আছে সেটা দেখায়
+ * DiplomaStudy - Semester Detail Page (DB-driven)
+ * Shows all subjects for a selected semester
  */
 
 import { AppShell } from "../components/AppShell.js";
-import { getSemesterById, semesters } from "../../data/semesterStructure.js";
-import { getBooksBySemester } from "../../data/semesterBooks.js";
-import { CIVIL_DEPARTMENT } from "../../data/civilSubjects.js";
-import { EmptyState } from "../components/EmptyState.js";
-import { showComingSoon } from "../core/comingSoonHelper.js";
-import { router } from "../core/router.js";
+import { getSemestersByDepartment, getDepartments, getSubjectsByAssignment } from "../services/api.js";
+import { storage, STORAGE_KEYS } from "../core/storage.js";
 
-export function renderSemesterDetail(params = {}) {
-  const semesterId = Number(params.semId) || 1;
-  const semester = getSemesterById(semesterId);
-
-  if (!semester) {
-    AppShell.updateHeader({
-      title: "Semester Not Found",
-      showBack: true
-    });
-    const main = AppShell.getMainView();
-    if (main) {
-      main.innerHTML = EmptyState.render({
-        icon: "❓",
-        title: "Semester Not Found",
-        banglaTitle: "সেমিস্টার পাওয়া যায়নি",
-        message: "এই semester টি খুঁজে পাওয়া যায়নি।",
-        showBadge: false
-      });
-    }
-    return;
-  }
-
+export async function renderSemesterDetail(params = {}) {
   AppShell.updateHeader({
-    title: `${semester.banglaName} (${semester.name})`,
-    subtitle: CIVIL_DEPARTMENT.name,
-    showBack: true
+    title: "Loading...",
+    subtitle: "",
+    showBack: true,
+    showSearch: false,
+    showTheme: true,
+    showSettings: false
   });
 
   const main = AppShell.getMainView();
   if (!main) return;
 
-  const books = getBooksBySemester(semesterId);
-  const hasBooks = books.length > 0;
-
   main.innerHTML = `
-    <!-- ═══════════════════════════════════
-         SEMESTER HERO
-         ═══════════════════════════════════ -->
-    <div class="semester-hero">
-      <div class="semester-hero-bg"></div>
-      <div class="semester-hero-content">
-        <div class="semester-hero-icon">${semester.icon}</div>
-        <div class="semester-hero-info">
-          <h1 class="semester-hero-name">${semester.banglaName}</h1>
-          <p class="semester-hero-en">${semester.name} • Semester ${semester.roman}</p>
-          <p class="semester-hero-desc">${semester.description}</p>
-        </div>
-        <div class="semester-hero-stats">
-          <div class="shs-item">
-            <span class="shs-value">${books.length}</span>
-            <span class="shs-label">বই</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ═══════════════════════════════════
-         BOOKS LIST / EMPTY STATE
-         ═══════════════════════════════════ -->
-    ${hasBooks ? `
-      <div class="compact-section-header">
-        <span class="csh-icon">📚</span>
-        <span class="csh-title">সব বই (${books.length}টি)</span>
-        <span class="csh-hint">📄 PDF</span>
-      </div>
-
-      <div class="semester-books-list">
-        ${books.map((book, idx) => `
-          <div 
-            class="book-card" 
-            data-book-id="${book.id}"
-            data-book-name="${book.name}"
-            role="button"
-            tabindex="0"
-            aria-label="${book.name}"
-          >
-            <div class="book-number">${String(idx + 1).padStart(2, "0")}</div>
-            
-            <div class="book-icon-box">
-              <span class="book-icon">${book.icon}</span>
-            </div>
-
-            <div class="book-body">
-              <h3 class="book-name">${book.name}</h3>
-              <p class="book-bangla">${book.banglaName}</p>
-              <div class="book-meta">
-                <span class="book-chip">${book.code}</span>
-                <span class="book-chip">${book.type}</span>
-                <span class="book-chip book-chip-credit">${book.credits} cr</span>
-              </div>
-            </div>
-
-            <div class="book-pdf-icon">
-              <span class="bpi-icon">📄</span>
-              <span class="bpi-label">PDF</span>
-            </div>
-          </div>
-        `).join("")}
-      </div>
-
-      <!-- Info Box -->
-      <div class="info-box-civil mt-md">
-        <div class="info-icon">💡</div>
-        <div>
-          <p class="info-text">সব বই PDF আকারে থাকবে</p>
-          <p class="info-sub">Server থেকে PDF যোগ করা হলে প্রতিটা বই tap করে পড়া যাবে।</p>
-        </div>
-      </div>
-
-    ` : `
-      <div class="empty-semester-box">
-        <div class="esb-icon">${semester.icon}</div>
-        <h3 class="esb-title">${semester.banglaName} এর বই শীঘ্রই আসছে</h3>
-        <p class="esb-bangla">এই semester এর সব বই server থেকে যোগ করা হবে।</p>
-        <div class="esb-features">
-          <span class="esb-chip">📄 PDF Books</span>
-          <span class="esb-chip">📚 All Subjects</span>
-          <span class="esb-chip">🔒 Coming Soon</span>
-        </div>
-      </div>
-    `}
-
-    <!-- ═══════════════════════════════════
-         QUICK SEMESTER NAVIGATION
-         ═══════════════════════════════════ -->
-    <div class="compact-section-header">
-      <span class="csh-icon">⚡</span>
-      <span class="csh-title">অন্য সেমিস্টার</span>
-    </div>
-
-    <div class="semester-quick-nav">
-      ${semesters
-        .filter((s) => s.id !== semesterId)
-        .map((s) => `
-          <button 
-            class="sqn-btn ${s.isActive ? "active" : "locked"}"
-            data-target-sem="${s.id}"
-          >
-            <span class="sqn-icon">${s.icon}</span>
-            <span class="sqn-name">${s.banglaName}</span>
-            ${!s.isActive ? `<span class="sqn-lock">🔒</span>` : ""}
-          </button>
-        `).join("")}
+    <div style="text-align:center;padding:60px 20px;">
+      <div class="spinner"></div>
     </div>
   `;
 
-  // ═══════════════════════════════════════════
-  // Bind book click → show PDF coming soon
-  // ═══════════════════════════════════════════
-  main.querySelectorAll(".book-card").forEach((card) => {
-    const handle = () => {
-      const name = card.getAttribute("data-book-name");
-      showComingSoon(`📄 ${name} PDF`);
-    };
-    card.addEventListener("click", handle);
-    card.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        handle();
-      }
+  // ═══ Get params ═══
+  const urlParams = new URLSearchParams(window.location.hash.split("?")[1] || "");
+  const semId = params.semId || urlParams.get("semId") || "";
+
+  const settings = storage.get(STORAGE_KEYS.SETTINGS, {});
+  const deptId = settings.departmentId || settings.department || "";
+
+  if (!semId || !deptId) {
+    main.innerHTML = `
+      <div style="text-align:center;padding:60px 20px;">
+        <div style="font-size:56px;margin-bottom:16px;">❓</div>
+        <h2 style="font-size:17px;font-weight:800;color:#1C3E2C;margin:0 0 8px;">Data নেই</h2>
+        <button id="goto-home" style="margin-top:12px;padding:12px 20px;border-radius:12px;border:none;background:linear-gradient(135deg,#1C3E2C,#2A5540);color:#FFFFFF;font-weight:800;font-size:13.5px;cursor:pointer;font-family:inherit;">
+          🏠 Home এ যান
+        </button>
+      </div>
+    `;
+    main.querySelector("#goto-home")?.addEventListener("click", () => {
+      window.location.hash = "#/home";
+    });
+    return;
+  }
+
+  // ═══ Load data ═══
+  let departments = [];
+  let semesters = [];
+  let subjects = [];
+
+  try { departments = await getDepartments(); } catch (e) {}
+  try { semesters = await getSemestersByDepartment(deptId); } catch (e) {}
+  try { subjects = await getSubjectsByAssignment(deptId, semId); } catch (e) {}
+
+  const currentDept = departments.find((d) => d.id === deptId);
+  const currentSem = semesters.find((s) => s.id === semId);
+
+  if (!currentSem) {
+    main.innerHTML = `
+      <div style="text-align:center;padding:60px 20px;">
+        <div style="font-size:56px;margin-bottom:16px;">📅</div>
+        <h2 style="font-size:17px;font-weight:800;color:#1C3E2C;margin:0 0 8px;">Semester পাওয়া যায়নি</h2>
+        <button id="goto-home" style="margin-top:12px;padding:12px 20px;border-radius:12px;border:none;background:linear-gradient(135deg,#1C3E2C,#2A5540);color:#FFFFFF;font-weight:800;font-size:13.5px;cursor:pointer;font-family:inherit;">
+          🏠 Home এ যান
+        </button>
+      </div>
+    `;
+    main.querySelector("#goto-home")?.addEventListener("click", () => {
+      window.location.hash = "#/home";
+    });
+    return;
+  }
+
+  AppShell.updateHeader({
+    title: currentSem.name,
+    subtitle: currentDept ? currentDept.name : "",
+    showBack: true,
+    showSearch: false,
+    showTheme: true,
+    showSettings: false
+  });
+
+  // ═══ Render ═══
+  main.innerHTML = `
+    <!-- HERO -->
+    <div style="
+      position:relative;
+      padding:22px 20px;
+      border-radius:22px;
+      background:linear-gradient(135deg, #163524 0%, #1F4A32 50%, #2A5540 100%);
+      box-shadow:0 16px 40px -12px rgba(28,62,44,0.4);
+      margin-bottom:20px;
+      overflow:hidden;
+      color:#FFFFFF;
+    ">
+      <div style="position:absolute;top:-50px;right:-50px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(200,122,30,0.2),transparent 70%);"></div>
+
+      <div style="position:relative;z-index:2;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+          <div style="
+            width:60px;height:60px;border-radius:18px;
+            background:rgba(255,255,255,0.18);
+            backdrop-filter:blur(10px);
+            border:1.5px solid rgba(255,255,255,0.25);
+            display:flex;align-items:center;justify-content:center;
+            font-size:30px;flex-shrink:0;
+          ">${currentSem.icon || "📅"}</div>
+          <div style="flex:1;min-width:0;">
+            <h1 style="font-size:22px;font-weight:900;letter-spacing:-0.5px;margin:0 0 4px;">
+              ${escapeHtml(currentSem.name)}
+            </h1>
+            ${currentDept ? `
+              <p style="font-size:12.5px;opacity:0.85;margin:0;font-weight:600;">
+                ${currentDept.icon || "🏛️"} ${escapeHtml(currentDept.name)}
+              </p>
+            ` : ""}
+          </div>
+        </div>
+
+        <div style="
+          display:flex;gap:20px;
+          padding-top:14px;
+          border-top:1px solid rgba(255,255,255,0.15);
+        ">
+          <div>
+            <div style="font-size:22px;font-weight:900;">${subjects.length}</div>
+            <div style="font-size:10px;opacity:0.7;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">Subjects</div>
+          </div>
+          <div>
+            <div style="font-size:22px;font-weight:900;">${currentSem.number}</div>
+            <div style="font-size:10px;opacity:0.7;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">Semester #</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SUBJECTS -->
+    ${subjects.length > 0 ? `
+      <div style="display:flex;justify-content:space-between;margin:0 0 12px;">
+        <h2 style="font-size:15px;font-weight:800;color:#1C3E2C;margin:0;">Subjects</h2>
+        <span style="font-size:11.5px;font-weight:700;color:#84968B;">${subjects.length}টি</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        ${subjects.map((sub, idx) => `
+          <button 
+            class="sem-subject-card"
+            data-subject-id="${sub.id}"
+            style="
+              display:flex;align-items:center;gap:12px;
+              padding:14px;
+              background:#FFFFFF;
+              border:1px solid #E1E8E1;
+              border-radius:16px;
+              cursor:pointer;font-family:inherit;text-align:left;
+              box-shadow:0 2px 8px rgba(28,62,44,0.04);
+              transition:all 0.2s ease;
+              width:100%;
+              -webkit-tap-highlight-color:transparent;
+            "
+          >
+            <div style="
+              font-size:10px;font-weight:800;color:#84968B;
+              font-family:ui-monospace,monospace;
+              width:24px;text-align:center;flex-shrink:0;
+            ">${String(idx + 1).padStart(2, "0")}</div>
+
+            <div style="
+              width:46px;height:46px;border-radius:13px;
+              background:linear-gradient(135deg,#DCFCE7,#BBF7D0);
+              display:flex;align-items:center;justify-content:center;
+              font-size:22px;flex-shrink:0;
+            ">${sub.icon || "📘"}</div>
+
+            <div style="flex:1;min-width:0;">
+              <div style="
+                font-size:13.5px;font-weight:800;color:#1C3E2C;
+                letter-spacing:-0.2px;margin-bottom:2px;
+                overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+              ">${escapeHtml(sub.name)}</div>
+              ${sub.banglaName ? `
+                <div style="font-size:11px;color:#84968B;font-weight:600;margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                  ${escapeHtml(sub.banglaName)}
+                </div>
+              ` : ""}
+              <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                ${sub.code ? `<span style="font-size:9px;font-weight:800;color:#065F46;background:#DCFCE7;padding:2px 7px;border-radius:5px;text-transform:uppercase;">${escapeHtml(sub.code)}</span>` : ""}
+                ${sub.type ? `<span style="font-size:9px;font-weight:800;color:#57675D;background:#F2F5F2;padding:2px 7px;border-radius:5px;text-transform:uppercase;">${escapeHtml(sub.type)}</span>` : ""}
+              </div>
+            </div>
+
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#84968B" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
+        `).join("")}
+      </div>
+    ` : `
+      <div style="
+        text-align:center;padding:48px 24px;
+        background:#FFFFFF;
+        border:1.5px dashed #E1E8E1;
+        border-radius:20px;
+        margin-bottom:20px;
+      ">
+        <div style="font-size:56px;margin-bottom:12px;opacity:0.8;">📚</div>
+        <h3 style="font-size:15px;font-weight:800;color:#1C3E2C;margin:0 0 6px;">কোনো Subject নেই</h3>
+        <p style="font-size:12px;color:#84968B;line-height:1.6;max-width:280px;margin:0 auto;">
+          এই semester-এ এখনো কোনো subject যোগ করা হয়নি।
+        </p>
+      </div>
+    `}
+
+    <!-- Quick nav to other semesters -->
+    ${semesters.length > 1 ? `
+      <div style="display:flex;justify-content:space-between;margin:24px 0 12px;">
+        <h2 style="font-size:15px;font-weight:800;color:#1C3E2C;margin:0;">অন্য সেমিস্টার</h2>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:20px;">
+        ${semesters.filter((s) => s.id !== semId).map((s) => `
+          <button 
+            class="other-sem-btn"
+            data-target-sem="${s.id}"
+            style="
+              display:flex;flex-direction:column;align-items:center;gap:4px;
+              padding:12px 8px;
+              background:#FFFFFF;
+              border:1px solid #E1E8E1;
+              border-radius:14px;
+              cursor:pointer;font-family:inherit;
+              transition:all 0.15s ease;
+              -webkit-tap-highlight-color:transparent;
+            "
+          >
+            <span style="font-size:20px;">${s.icon || "📅"}</span>
+            <span style="font-size:11px;font-weight:800;color:#1C3E2C;">${escapeHtml(s.name)}</span>
+          </button>
+        `).join("")}
+      </div>
+    ` : ""}
+
+    <div style="height:20px;"></div>
+  `;
+
+  // ═══ Bind ═══
+  main.querySelectorAll(".sem-subject-card").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const id = btn.getAttribute("data-subject-id");
+      if (id) window.location.hash = `#/subject?subjectId=${id}`;
+    });
+
+    btn.addEventListener("mouseenter", () => {
+      btn.style.transform = "translateY(-2px)";
+      btn.style.boxShadow = "0 8px 20px rgba(28,62,44,0.1)";
+      btn.style.borderColor = "#7A9B7A";
+    });
+    btn.addEventListener("mouseleave", () => {
+      btn.style.transform = "";
+      btn.style.boxShadow = "0 2px 8px rgba(28,62,44,0.04)";
+      btn.style.borderColor = "#E1E8E1";
     });
   });
 
-  // ═══════════════════════════════════════════
-  // Bind quick semester navigation
-  // ═══════════════════════════════════════════
-  main.querySelectorAll(".sqn-btn").forEach((btn) => {
+  main.querySelectorAll(".other-sem-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const targetId = Number(btn.getAttribute("data-target-sem"));
-      const targetSem = getSemesterById(targetId);
-      if (targetSem && targetSem.isActive) {
-        router.navigate(`#/semester?semId=${targetId}`);
-      } else {
-        showComingSoon(`${targetSem.banglaName} এর বই`);
+      const target = btn.getAttribute("data-target-sem");
+      if (target) {
+        window.location.hash = `#/semester?semId=${target}`;
       }
     });
   });
+}
+
+// ═══════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
