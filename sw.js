@@ -1,8 +1,9 @@
 /**
  * DiplomaStudy - Service Worker (Offline Support)
+ * Version 9 - cache bump to force refresh
  */
 
-const CACHE_VERSION = "diplomastudy-v1";
+const CACHE_VERSION = "diplomastudy-v9";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -32,11 +33,9 @@ const PRECACHE_URLS = [
   "./js/components/Toast.js"
 ];
 
-// ═══════════════════════════════════════════
 // INSTALL
-// ═══════════════════════════════════════════
 self.addEventListener("install", (event) => {
-  console.log("[SW] Installing...");
+  console.log("[SW] Installing v9...");
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then((cache) => {
@@ -48,11 +47,9 @@ self.addEventListener("install", (event) => {
   );
 });
 
-// ═══════════════════════════════════════════
 // ACTIVATE
-// ═══════════════════════════════════════════
 self.addEventListener("activate", (event) => {
-  console.log("[SW] Activating...");
+  console.log("[SW] Activating v9...");
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
@@ -64,29 +61,20 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// ═══════════════════════════════════════════
-// FETCH — Strategy per request type
-// ═══════════════════════════════════════════
+// FETCH
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET
   if (request.method !== "GET") return;
-
-  // Skip Supabase API (handled by app-level cache)
   if (url.hostname.includes("supabase.co")) return;
-
-  // Skip chrome-extension etc
   if (!url.protocol.startsWith("http")) return;
 
-  // HTML pages: Network-first, fallback to cache
   if (request.mode === "navigate" || request.destination === "document") {
     event.respondWith(networkFirst(request));
     return;
   }
 
-  // Static assets (CSS/JS/images): Cache-first
   if (
     request.destination === "style" ||
     request.destination === "script" ||
@@ -97,13 +85,10 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Everything else: Network-first
   event.respondWith(networkFirst(request));
 });
 
-// ═══════════════════════════════════════════
 // STRATEGIES
-// ═══════════════════════════════════════════
 async function cacheFirst(request) {
   const cache = await caches.open(STATIC_CACHE);
   const cached = await cache.match(request);
@@ -133,7 +118,6 @@ async function networkFirst(request) {
     const cached = await cache.match(request);
     if (cached) return cached;
 
-    // Fallback to index.html for navigation
     if (request.mode === "navigate") {
       const fallback = await caches.match("./index.html");
       if (fallback) return fallback;
@@ -146,9 +130,7 @@ async function networkFirst(request) {
   }
 }
 
-// ═══════════════════════════════════════════
-// MESSAGE (from app)
-// ═══════════════════════════════════════════
+// MESSAGE
 self.addEventListener("message", (event) => {
   if (event.data === "SKIP_WAITING") {
     self.skipWaiting();
@@ -160,4 +142,4 @@ self.addEventListener("message", (event) => {
   }
 });
 
-console.log("[SW] Loaded");
+console.log("[SW] Loaded v9");

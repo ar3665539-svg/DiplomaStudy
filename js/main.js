@@ -1,107 +1,66 @@
 /**
- * DiplomaStudy - Main Bootstrap v7
- * Bulletproof — visible error reporting
- * Registers ALL pages dynamically
+ * DiplomaStudy - Main Bootstrap v8.1
+ * Adds fallback for #/more if More.js fails to load
  */
 
-console.log("[Main] 📥 Script started");
+console.log("[Main] v8.1 starting...");
 
-// ═══════════════════════════════════════════
-// LOADING LOGGER
-// ═══════════════════════════════════════════
-const loadLog = [];
-
+// BOOT ERROR DISPLAY
 function showBootError(stage, err) {
-  const msg = err?.message || String(err);
-  loadLog.push(`❌ [${stage}] ${msg}`);
-  console.error(`[Main] ❌ ${stage}:`, err);
+  var msg = (err && err.message) ? err.message : String(err);
+  console.error("[Main] Error at " + stage + ":", err);
 
-  const loader = document.querySelector(".initial-loader");
+  var loader = document.querySelector(".initial-loader");
   if (loader) {
-    loader.innerHTML = `
-      <div style="padding:20px;font-family:monospace;font-size:12px;text-align:left;background:#FEF3C7;color:#78350F;border-radius:12px;margin:20px;max-width:100%;">
-        <h3 style="font-size:14px;margin:0 0 8px;color:#92400E;">⚠️ Boot Error: ${stage}</h3>
-        <pre style="white-space:pre-wrap;word-break:break-word;font-size:11px;margin:0;">${escapeText(msg)}</pre>
-        <div style="margin-top:12px;font-size:11px;">
-          ${loadLog.map((l) => `<div>${escapeText(l)}</div>`).join("")}
-        </div>
-      </div>
-    `;
+    loader.innerHTML =
+      '<div style="padding:20px;font-family:monospace;font-size:12px;text-align:left;background:#FEF3C7;color:#78350F;border-radius:12px;margin:20px;max-width:100%;">' +
+        '<h3 style="font-size:14px;margin:0 0 8px;color:#92400E;">Boot Error: ' + stage + '</h3>' +
+        '<pre style="white-space:pre-wrap;word-break:break-word;font-size:11px;margin:0;">' + escapeText(msg) + '</pre>' +
+        '<p style="font-size:11px;margin:12px 0 0;color:#92400E;">Screenshot pathan - fix dewa hobe.</p>' +
+      '</div>';
   }
 }
 
 function escapeText(str) {
   return String(str || "")
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
-// ═══════════════════════════════════════════
 // SAFE DYNAMIC IMPORT
-// ═══════════════════════════════════════════
 async function safeImport(path, name) {
   try {
-    const mod = await import(path);
-    console.log(`[Main] ✅ Loaded: ${name}`);
+    var mod = await import(path);
+    console.log("[Main] Loaded: " + name);
     return mod;
   } catch (err) {
-    loadLog.push(`❌ ${name}: ${err.message || err}`);
-    console.error(`[Main] ❌ Failed to load ${name}:`, err);
+    console.warn("[Main] Failed to load " + name + ":", err);
     return null;
   }
 }
 
-// ═══════════════════════════════════════════
-// BOOTSTRAP
-// ═══════════════════════════════════════════
+// BOOT
 async function boot() {
-  console.log("[Main] 🚀 Booting...");
+  console.log("[Main] Booting...");
 
-  // 1. Load CORE
-  const AppShellMod = await safeImport("./components/AppShell.js", "AppShell");
-  const routerMod = await safeImport("./core/router.js", "router");
-  const storageMod = await safeImport("./core/storage.js", "storage");
+  // Core modules
+  var AppShellMod = await safeImport("./components/AppShell.js", "AppShell");
+  var routerMod = await safeImport("./core/router.js", "router");
+  var storageMod = await safeImport("./core/storage.js", "storage");
 
   if (!AppShellMod || !routerMod) {
     showBootError("Core modules", new Error("AppShell or Router missing"));
     return;
   }
 
-  const { AppShell } = AppShellMod;
-  const { router } = routerMod;
-  const { storage, STORAGE_KEYS } = storageMod || {};
+  var AppShell = AppShellMod.AppShell;
+  var router = routerMod.router || routerMod.default;
+  var storage = storageMod ? storageMod.storage : null;
+  var STORAGE_KEYS = storageMod ? storageMod.STORAGE_KEYS : null;
 
-  // 2. Load ALL PAGE modules
-  const [
-    onboardingMod,
-    homeMod,
-    departmentsMod,
-    semestersMod,
-    semesterDetailMod,
-    subjectsMod,
-    subjectDetailMod,
-    chaptersMod,
-    contentViewMod,
-    pdfViewerMod,
-    deptPdfMod,
-    pdfLibraryMod,
-    questionsMod,
-    suggestionsMod,
-    formulaMod,
-    noticesMod,
-    quizMod,
-    comingSoonMod,
-    moreMod,
-    searchMod,
-    settingsMod,
-    bookmarksMod,
-    progressMod,
-    notesMod,
-    plannerMod,
-    timerMod,
-    jobsMod,
-    aiMod,
-    toolsMod
-  ] = await Promise.all([
+  // Load pages (parallel)
+  var mods = await Promise.all([
     safeImport("./pages/Onboarding.js", "Onboarding"),
     safeImport("./pages/Home.js", "Home"),
     safeImport("./pages/Departments.js", "Departments"),
@@ -128,120 +87,177 @@ async function boot() {
     safeImport("./pages/Notes.js", "Notes"),
     safeImport("./pages/Planner.js", "Planner"),
     safeImport("./pages/Timer.js", "Timer"),
+    safeImport("./pages/Tools.js", "Tools"),
     safeImport("./pages/Jobs.js", "Jobs"),
-    safeImport("./pages/AiAssistant.js", "AiAssistant"),
-    safeImport("./pages/Tools.js", "Tools")
+    safeImport("./pages/AiAssistant.js", "AiAssistant")
   ]);
 
-  // 3. Init AppShell
+  var OnboardingMod       = mods[0];
+  var HomeMod             = mods[1];
+  var DepartmentsMod      = mods[2];
+  var SemestersMod        = mods[3];
+  var SemesterDetailMod   = mods[4];
+  var SubjectsMod         = mods[5];
+  var SubjectDetailMod    = mods[6];
+  var ChaptersMod         = mods[7];
+  var ContentViewMod      = mods[8];
+  var PdfViewerMod        = mods[9];
+  var DeptPdfMod          = mods[10];
+  var PdfLibraryMod       = mods[11];
+  var QuestionsMod        = mods[12];
+  var SuggestionsMod      = mods[13];
+  var FormulaMod          = mods[14];
+  var NoticesMod          = mods[15];
+  var QuizMod             = mods[16];
+  var ComingSoonMod       = mods[17];
+  var MoreMod             = mods[18];
+  var SearchMod           = mods[19];
+  var SettingsMod         = mods[20];
+  var BookmarksMod        = mods[21];
+  var ProgressMod         = mods[22];
+  var NotesMod            = mods[23];
+  var PlannerMod          = mods[24];
+  var TimerMod            = mods[25];
+  var ToolsMod            = mods[26];
+  var JobsMod             = mods[27];
+  var AiMod               = mods[28];
+
+  // Init AppShell
   try {
     AppShell.init();
-    console.log("[Main] ✅ AppShell ready");
+    console.log("[Main] AppShell ready");
   } catch (err) {
     showBootError("AppShell.init", err);
     return;
   }
 
-  // 4. Register routes
-  function reg(hash, mod, fn) {
+  // Route registration helper
+  function reg(hash, mod, fn, title, subtitle) {
     if (!mod || typeof mod[fn] !== "function") {
-      console.warn(`[Main] ⚠️ Route ${hash} skipped (${fn} not found)`);
+      console.warn("[Main] Route " + hash + " skipped (" + fn + " missing)");
       return;
     }
-    router.register(hash, mod[fn]);
-    console.log(`[Main] ✅ Route ${hash} registered`);
+    router.register(hash, {
+      title: title || "",
+      subtitle: subtitle || "",
+      render: mod[fn]
+    });
+    console.log("[Main] Route " + hash + " registered");
   }
 
-  // ─── Entry / Core ───
-  reg("#/onboarding", onboardingMod, "renderOnboarding");
-  reg("#/home", homeMod, "renderHome");
+  // Register all routes
+  reg("#/onboarding",    OnboardingMod,     "renderOnboarding",     "Welcome",     "");
+  reg("#/home",          HomeMod,           "renderHome",           "Home",        "");
+  reg("#/departments",   DepartmentsMod,    "renderDepartments",    "Departments", "Select your technology");
+  reg("#/semesters",     SemestersMod,      "renderSemesters",      "Semesters",   "");
+  reg("#/semester",      SemesterDetailMod, "renderSemesterDetail", "Semester",    "");
+  reg("#/subjects",      SubjectsMod,       "renderSubjects",       "Subjects",    "");
+  reg("#/subject",       SubjectDetailMod,  "renderSubjectDetail",  "Subject",     "");
+  reg("#/chapters",      ChaptersMod,       "renderChapters",       "Chapters",    "");
+  reg("#/content",       ContentViewMod,    "renderContentView",    "Content",     "");
+  reg("#/pdf-viewer",    PdfViewerMod,      "renderPdfViewer",      "PDF Viewer",  "");
+  reg("#/dept-pdf",      DeptPdfMod,        "renderDepartmentPDF",  "PDFs",        "");
+  reg("#/pdfs",          PdfLibraryMod,     "renderPdfLibrary",     "PDF Library", "");
+  reg("#/questions",     QuestionsMod,      "renderQuestions",      "Questions",   "");
+  reg("#/suggestions",   SuggestionsMod,    "renderSuggestions",    "Suggestions", "");
+  reg("#/formulas",      FormulaMod,        "renderFormula",        "Formulas",    "");
+  reg("#/notices",       NoticesMod,        "renderNotices",        "Notices",     "");
+  reg("#/quiz",          QuizMod,           "renderQuiz",           "Quiz",        "");
+  reg("#/coming-soon",   ComingSoonMod,     "renderComingSoon",     "Coming Soon", "");
+  reg("#/more",          MoreMod,           "renderMore",           "More",        "");
+  reg("#/search",        SearchMod,         "renderSearch",         "Search",      "");
+  reg("#/settings",      SettingsMod,       "renderSettings",       "Settings",    "");
+  reg("#/bookmarks",     BookmarksMod,      "renderBookmarks",      "Bookmarks",   "");
+  reg("#/progress",      ProgressMod,       "renderProgress",       "Progress",    "");
+  reg("#/notes",         NotesMod,          "renderNotes",          "Notes",       "");
+  reg("#/planner",       PlannerMod,        "renderPlanner",        "Planner",     "");
+  reg("#/timer",         TimerMod,          "renderTimer",          "Timer",       "");
+  reg("#/tools",         ToolsMod,          "renderTools",          "Tools",       "");
+  reg("#/jobs",          JobsMod,           "renderJobs",           "Jobs",        "");
+  reg("#/ai",            AiMod,             "renderAiAssistant",    "AI Tutor",    "");
 
-  // ─── Navigation ───
-  reg("#/departments", departmentsMod, "renderDepartments");
-  reg("#/semesters", semestersMod, "renderSemesters");
-  reg("#/semester", semesterDetailMod, "renderSemesterDetail");
-  reg("#/subjects", subjectsMod, "renderSubjects");
-  reg("#/subject", subjectDetailMod, "renderSubjectDetail");
-  reg("#/chapters", chaptersMod, "renderChapters");
+  // ═══════════════════════════════════════════
+  // BULLETPROOF FALLBACK for #/more
+  // If More.js failed to load for any reason,
+  // register a simple inline version so the More button always works.
+  // ═══════════════════════════════════════════
+  var _routeMap = router.routes || router.handlers || {};
+  if (!_routeMap["#/more"]) {
+    console.warn("[Main] More.js did not register. Using fallback.");
+    router.register("#/more", {
+      title: "More",
+      subtitle: "",
+      render: function (container) {
+        var html =
+          '<div style="padding:16px;">' +
+          '  <div style="background:#1C3E2C;color:#fff;padding:14px;border-radius:12px;text-align:center;margin-bottom:16px;">' +
+          '    <div style="font-weight:800;font-size:14px;">More (fallback)</div>' +
+          '    <div style="font-size:11px;opacity:0.8;margin-top:4px;">More.js did not load. Using inline fallback.</div>' +
+          '  </div>' +
+          '  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+          '    <a href="#/bookmarks" style="padding:14px;border-radius:12px;background:#F3F7F3;color:#1C3E2C;text-decoration:none;font-weight:700;font-size:14px;">Bookmarks</a>' +
+          '    <a href="#/notes" style="padding:14px;border-radius:12px;background:#F3F7F3;color:#1C3E2C;text-decoration:none;font-weight:700;font-size:14px;">Notes</a>' +
+          '    <a href="#/progress" style="padding:14px;border-radius:12px;background:#F3F7F3;color:#1C3E2C;text-decoration:none;font-weight:700;font-size:14px;">Progress</a>' +
+          '    <a href="#/planner" style="padding:14px;border-radius:12px;background:#F3F7F3;color:#1C3E2C;text-decoration:none;font-weight:700;font-size:14px;">Planner</a>' +
+          '    <a href="#/timer" style="padding:14px;border-radius:12px;background:#F3F7F3;color:#1C3E2C;text-decoration:none;font-weight:700;font-size:14px;">Timer</a>' +
+          '    <a href="#/tools" style="padding:14px;border-radius:12px;background:#F3F7F3;color:#1C3E2C;text-decoration:none;font-weight:700;font-size:14px;">Tools</a>' +
+          '    <a href="#/pdfs" style="padding:14px;border-radius:12px;background:#F3F7F3;color:#1C3E2C;text-decoration:none;font-weight:700;font-size:14px;">PDF Library</a>' +
+          '    <a href="#/formulas" style="padding:14px;border-radius:12px;background:#F3F7F3;color:#1C3E2C;text-decoration:none;font-weight:700;font-size:14px;">Formulas</a>' +
+          '    <a href="#/settings" style="padding:14px;border-radius:12px;background:#F3F7F3;color:#1C3E2C;text-decoration:none;font-weight:700;font-size:14px;">Settings</a>' +
+          '  </div>' +
+          '</div>';
+        if (container && container.innerHTML !== undefined) container.innerHTML = html;
+        return html;
+      }
+    });
+    console.log("[Main] Fallback #/more registered");
+  } else {
+    console.log("[Main] #/more already registered (More.js loaded OK)");
+  }
 
-  // ─── Content ───
-  reg("#/content", contentViewMod, "renderContentView");
-  reg("#/questions", questionsMod, "renderQuestions");
-  reg("#/suggestions", suggestionsMod, "renderSuggestions");
-  reg("#/formulas", formulaMod, "renderFormula");
-  reg("#/notices", noticesMod, "renderNotices");
-  reg("#/quiz", quizMod, "renderQuiz");
-
-  // ─── PDFs ───
-  reg("#/pdfs", pdfLibraryMod, "renderPdfLibrary");
-  reg("#/pdf-viewer", pdfViewerMod, "renderPdfViewer");
-  reg("#/dept-pdf", deptPdfMod, "renderDepartmentPDF");
-
-  // ─── Personal ───
-  reg("#/bookmarks", bookmarksMod, "renderBookmarks");
-  reg("#/progress", progressMod, "renderProgress");
-  reg("#/notes", notesMod, "renderNotes");
-  reg("#/planner", plannerMod, "renderPlanner");
-  reg("#/timer", timerMod, "renderTimer");
-
-  // ─── Tools ───
-  reg("#/tools", toolsMod, "renderTools");
-
-  // ─── Future / Coming Soon ───
-  reg("#/jobs", jobsMod, "renderJobs");
-  reg("#/ai", aiMod, "renderAiAssistant");
-
-  // ─── System ───
-  reg("#/more", moreMod, "renderMore");
-  reg("#/search", searchMod, "renderSearch");
-  reg("#/settings", settingsMod, "renderSettings");
-  reg("#/coming-soon", comingSoonMod, "renderComingSoon");
-
-  // 5. Entry point
+  // Entry point
   if (!window.location.hash) {
-    let hasOnboarding = false;
+    var hasOnboarding = false;
     try {
-      const settings = storage?.get(STORAGE_KEYS?.SETTINGS, {}) || {};
+      var settings = (storage && STORAGE_KEYS) ? storage.get(STORAGE_KEYS.SETTINGS, {}) : {};
       hasOnboarding = !!(settings.department && settings.semester);
     } catch (e) {}
-
     window.location.hash = hasOnboarding ? "#/home" : "#/onboarding";
   }
 
-  // 6. Init router
+  // Init router
   try {
     router.init();
-    console.log("[Main] ✅ Router initialized");
+    console.log("[Main] Router initialized");
   } catch (err) {
     showBootError("router.init", err);
     return;
   }
 
-  // 7. Service worker (offline support)
+  // Service worker
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js").then((reg) => {
+    navigator.serviceWorker.register("./sw.js").then(function(reg) {
       console.log("[SW] Registered:", reg.scope);
-    }).catch((err) => {
+    }).catch(function(err) {
       console.warn("[SW] Registration failed:", err);
     });
   }
 
-  // 8. Realtime (optional)
+  // Realtime (optional)
   try {
-    const realtimeMod = await safeImport("./core/realtime.js", "realtime");
-    if (realtimeMod?.initRealtime) {
+    var realtimeMod = await safeImport("./core/realtime.js", "realtime");
+    if (realtimeMod && realtimeMod.initRealtime) {
       realtimeMod.initRealtime();
-      console.log("[Main] ✅ Realtime initialized");
+      console.log("[Main] Realtime initialized");
 
       if (realtimeMod.onContentChange) {
-        realtimeMod.onContentChange((event) => {
-          const currentHash = (window.location.hash || "#/home").split("?")[0];
-          const safeRoutes = [
-            "#/home", "#/subjects", "#/notices", "#/departments",
-            "#/semesters", "#/bookmarks", "#/progress", "#/formulas", "#/pdfs"
-          ];
-          if (safeRoutes.includes(currentHash)) {
-            setTimeout(() => window.dispatchEvent(new Event("hashchange")), 800);
+        realtimeMod.onContentChange(function(event) {
+          var currentHash = (window.location.hash || "#/home").split("?")[0];
+          var safeRoutes = ["#/home", "#/subjects", "#/notices", "#/departments", "#/semesters"];
+          if (safeRoutes.indexOf(currentHash) !== -1) {
+            setTimeout(function() {
+              window.dispatchEvent(new Event("hashchange"));
+            }, 800);
           }
         });
       }
@@ -250,22 +266,10 @@ async function boot() {
     console.warn("[Main] Realtime skipped:", err);
   }
 
-  // 9. Global error catcher
-  window.addEventListener("error", (e) => {
-    console.error("[Global Error]", e.error || e.message);
-  });
-
-  window.addEventListener("unhandledrejection", (e) => {
-    console.error("[Unhandled Promise]", e.reason);
-  });
-
-  console.log("[Main] ✅ Boot complete");
-  console.log("[Main] Routes registered:", Object.keys(router.routes || router.handlers || {}).length);
+  console.log("[Main] Boot complete");
 }
 
-// ═══════════════════════════════════════════
 // START
-// ═══════════════════════════════════════════
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", boot);
 } else {
