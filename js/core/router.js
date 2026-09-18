@@ -1,40 +1,46 @@
 /**
- * DiplomaStudy - Simple Hash Router
+ * DiplomaStudy - Simple Hash Router v2
+ * Adds route token to prevent async race conditions
  */
 
 let routes = {};
 let currentRoute = "";
 let cleanupFn = null;
 let _initialized = false;
+let _routeToken = 0;
 
 export function initRouter(routesMap) {
   routes = routesMap;
-
   window.addEventListener("hashchange", handleRoute);
-
   if (!window.location.hash) {
     window.location.hash = "#/home";
   } else {
     handleRoute();
   }
-
   _initialized = true;
+}
+
+// Export so pages can check if they're still the active route
+export function isRouteActive(token) {
+  return token === _routeToken;
+}
+
+export function getRouteToken() {
+  return _routeToken;
 }
 
 function handleRoute() {
   const hash = window.location.hash || "#/home";
   currentRoute = hash;
+  const myToken = ++_routeToken; // invalidate any in-flight async work
 
-  // Cleanup previous page
   if (cleanupFn) {
     try { cleanupFn(); } catch (e) {}
     cleanupFn = null;
   }
 
-  // Parse route + query
   const [pathPart, queryPart] = hash.split("?");
   const params = {};
-
   if (queryPart) {
     const searchParams = new URLSearchParams(queryPart);
     for (const [key, value] of searchParams.entries()) {
@@ -42,15 +48,13 @@ function handleRoute() {
     }
   }
 
-  // Find handler
   const handler = routes[pathPart];
   if (!handler) {
-    console.warn(`[Router] No route for ${pathPart}, redirecting to home`);
+    console.warn("[Router] No route for " + pathPart + ", redirecting to home");
     window.location.hash = "#/home";
     return;
   }
 
-  // Update title
   import("../components/AppShell.js").then(({ AppShell }) => {
     try {
       AppShell.updateHeader({
@@ -60,26 +64,25 @@ function handleRoute() {
     } catch (e) {}
   }).catch(() => {});
 
-  // Render
   const content = document.getElementById("main-view");
   if (content && handler.render) {
     content.innerHTML = "";
     try {
-      const result = handler.render(content, params);
+      const result = handler.render(content, params, myToken);
       if (result && typeof result.then === "function") {
         result.catch((err) => {
-          console.error(`[Router] Render error for ${pathPart}:`, err);
-          content.innerHTML = `
-            <div style="padding:40px 20px;text-align:center;">
-              <div style="font-size:48px;margin-bottom:12px;">⚠️</div>
-              <div style="font-size:15px;font-weight:800;color:#DC2626;">Page load failed</div>
-              <div style="font-size:12px;color:#84968B;margin-top:8px;">${escapeHtml(err.message)}</div>
-            </div>
-          `;
+          if (!isRouteActive(myToken)) return; // silent — user navigated away
+          console.error("[Router] Render error for " + pathPart + ":", err);
+          content.innerHTML =
+            '<div style="padding:40px 20px;text-align:center;">' +
+              '<div style="font-size:48px;margin-bottom:12px;">!</div>' +
+              '<div style="font-size:15px;font-weight:800;color:#DC2626;">Page load failed</div>' +
+              '<div style="font-size:12px;color:#84968B;margin-top:8px;">' + escapeHtml(err.message) + '</div>' +
+            '</div>';
         });
       }
     } catch (err) {
-      console.error(`[Router] Sync error for ${pathPart}:`, err);
+      console.error("[Router] Sync error for " + pathPart + ":", err);
     }
     window.scrollTo(0, 0);
   }
