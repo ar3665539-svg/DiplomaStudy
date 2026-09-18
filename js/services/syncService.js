@@ -1,35 +1,76 @@
 /**
  * DiplomaStudy - Sync Service
- * Foundation for cloud sync without requiring a backend in Version 1
+ * Handles online/offline state + data refresh
  */
 
-import { storage } from "../core/storage.js";
+import { clearCache } from "./api.js";
 import { Toast } from "../components/Toast.js";
 
+let onlineHandler = null;
+let offlineHandler = null;
+
 export const syncService = {
-  isCloudConnected() {
-    return false; // Offline-first in Version 1
+  isOnline() {
+    return navigator.onLine !== false;
   },
 
-  getStatus() {
-    return {
-      status: "offline_mode",
-      lastLocalChange: new Date().toISOString(),
-      pendingChanges: 0,
-      cloudConnected: false
+  /**
+   * Manually refresh all data
+   */
+  async refreshAll() {
+    try {
+      clearCache();
+      Toast.info("🔄 Refreshing...");
+      setTimeout(() => {
+        window.location.reload();
+      }, 300);
+    } catch (e) {
+      Toast.error("Refresh failed");
+    }
+  },
+
+  /**
+   * Watch connection status
+   */
+  watchConnection(onChange) {
+    this.unwatchConnection();
+
+    onlineHandler = () => {
+      if (onChange) onChange(true);
+      Toast.success("✅ অনলাইন");
     };
+
+    offlineHandler = () => {
+      if (onChange) onChange(false);
+      Toast.warning("📡 অফলাইন");
+    };
+
+    window.addEventListener("online", onlineHandler);
+    window.addEventListener("offline", offlineHandler);
   },
 
-  async syncNow() {
-    Toast.show("Running in Local Offline Mode. Data saved locally.", "info");
-    return { success: true, mode: "local" };
+  unwatchConnection() {
+    if (onlineHandler) { window.removeEventListener("online", onlineHandler); onlineHandler = null; }
+    if (offlineHandler) { window.removeEventListener("offline", offlineHandler); offlineHandler = null; }
   },
 
-  exportBackup() {
-    return storage.exportAllData();
+  /**
+   * Get last sync time
+   */
+  getLastSync() {
+    try {
+      const raw = localStorage.getItem("diplomastudy_last_sync");
+      return raw ? parseInt(raw, 10) : null;
+    } catch (e) { return null; }
   },
 
-  importBackup(jsonString) {
-    return storage.importData(jsonString);
+  /**
+   * Save sync timestamp
+   */
+  markSynced() {
+    try { localStorage.setItem("diplomastudy_last_sync", String(Date.now())); }
+    catch (e) {}
   }
 };
+
+export default syncService;

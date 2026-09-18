@@ -1,56 +1,50 @@
 /**
- * DiplomaStudy - QuizCard Component
+ * QuizCard — Reusable quiz card
  */
 
 export const QuizCard = {
   render(quiz) {
-    const minutes = Math.round((quiz.durationSeconds || 300) / 60);
+    const title = quiz.title || "Quiz";
+    const desc = quiz.description || "";
+    const duration = quiz.durationMinutes || quiz.duration_minutes || 10;
+    const total = quiz.totalMarks || quiz.total_marks || 0;
+    
     return `
-      <div class="card mb-md quiz-card" data-id="${quiz.id}" id="quiz-card-${quiz.id}">
-        <div class="flex items-start justify-between mb-sm">
-          <div>
-            <span class="badge badge-forest mb-xs">${quiz.subjectName || "Engineering"}</span>
-            <h3 class="text-base font-bold text-forest">${quiz.title}</h3>
+      <button class="quiz-card" data-quiz-id="${quiz.id || ''}" style="
+        display:flex;flex-direction:column;gap:12px;padding:16px;
+        background:linear-gradient(135deg, #FFFFFF, #F8FBF8);
+        border:1.5px solid #E1E8E1;border-radius:18px;
+        cursor:pointer;font-family:inherit;text-align:left;width:100%;
+        box-shadow:0 2px 8px rgba(28,62,44,0.04);
+        position:relative;overflow:hidden;
+      ">
+        <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#F59E0B,#D97706);"></div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#FEF3C7,#FDE68A);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">🎯</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:14px;font-weight:800;color:#1C3E2C;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(title)}</div>
+            ${desc ? `<div style="font-size:11.5px;color:#84968B;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(desc)}</div>` : ""}
           </div>
-          <span class="badge badge-accent">${quiz.difficulty || "Mixed"}</span>
         </div>
-
-        <div class="flex items-center gap-md text-xs text-muted mb-md">
-          <span class="flex items-center gap-xs">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"></circle>
-              <polyline points="12 6 12 12 16 14"></polyline>
-            </svg>
-            ${minutes} Minutes
-          </span>
-          <span class="flex items-center gap-xs">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-              <line x1="16" y1="13" x2="8" y2="13"></line>
-              <line x1="16" y1="17" x2="8" y2="17"></line>
-              <polyline points="10 9 9 9 8 9"></polyline>
-            </svg>
-            ${quiz.totalQuestions || quiz.questions.length} MCQs
-          </span>
+        <div style="display:flex;gap:14px;padding-top:10px;border-top:1px dashed #E1E8E1;font-size:11.5px;color:#57675D;font-weight:700;">
+          <span>⏱️ ${duration} min</span>
+          <span>📋 ${total} marks</span>
         </div>
-
-        <button class="btn btn-primary btn-block btn-start-quiz" data-id="${quiz.id}">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <polygon points="5 3 19 12 5 21 5 3"></polygon>
-          </svg>
-          <span>Start Practice Test</span>
-        </button>
-      </div>
+      </button>
     `;
   },
-
+  
   bindEvents(container, onStart) {
-    container.querySelectorAll(".btn-start-quiz").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-id");
+    container.querySelectorAll(".quiz-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        const id = card.getAttribute("data-quiz-id");
         if (onStart) onStart(id);
       });
     });
   }
 };
+
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}

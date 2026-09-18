@@ -1,6 +1,6 @@
 /**
  * DiplomaStudy User App - API Service v3
- * + Realtime-aware cache invalidation
+ * DB-driven + Realtime-aware cache invalidation
  */
 
 import { supabase } from '../core/supabase.js';
@@ -12,9 +12,7 @@ const CACHE_PREFIX = 'diplomastudy_cache_v2_';
 
 function saveCache(key, data) {
   try {
-    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({
-      data, cachedAt: Date.now()
-    }));
+    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ data, cachedAt: Date.now() }));
   } catch (e) {}
 }
 
@@ -35,10 +33,6 @@ export function clearCache() {
   } catch (e) {}
 }
 
-/**
- * Invalidate cache keys matching a table/purpose
- * Example: invalidateCache('subjects') → removes subjects_*
- */
 export function invalidateCache(pattern) {
   try {
     const keys = Object.keys(localStorage).filter((k) =>
@@ -48,13 +42,10 @@ export function invalidateCache(pattern) {
   } catch (e) {}
 }
 
-// Auto-invalidate on realtime changes
 try {
   window.addEventListener("ds:content-change", (e) => {
     const { table } = e.detail || {};
     if (!table) return;
-
-    // Map table → cache prefixes
     const mapping = {
       departments: ["departments"],
       semesters: ["semesters"],
@@ -69,16 +60,11 @@ try {
       notices: ["notices"],
       quizzes: ["quizzes"]
     };
-
     const prefixes = mapping[table] || [table];
     prefixes.forEach((p) => invalidateCache(p));
-    console.log(`[API] Cache invalidated for: ${prefixes.join(", ")}`);
   });
 } catch (e) {}
 
-// ═══════════════════════════════════════════
-// UTILITY: UUID check
-// ═══════════════════════════════════════════
 function isUUID(v) {
   return typeof v === "string" && v.length >= 30 && v.includes("-");
 }
@@ -89,8 +75,7 @@ function isUUID(v) {
 function normalizeDepartment(d) {
   if (!d) return null;
   return {
-    id: d.id,
-    name: d.name,
+    id: d.id, name: d.name,
     banglaName: d.bangla_name || '',
     code: d.code || '',
     icon: d.icon || '🏛️',
@@ -104,8 +89,7 @@ function normalizeSemester(s) {
   return {
     id: s.id,
     departmentId: s.department_id,
-    name: s.name,
-    number: s.number,
+    name: s.name, number: s.number,
     icon: s.icon || '📅',
     displayOrder: s.display_order || 0
   };
@@ -114,15 +98,13 @@ function normalizeSemester(s) {
 function normalizeSubject(s) {
   if (!s) return null;
   return {
-    id: s.id,
-    name: s.name,
+    id: s.id, name: s.name,
     banglaName: s.bangla_name || '',
     code: s.code || '',
     icon: s.icon || '📚',
     type: s.type || 'Theory',
     credits: s.credits || 3,
     description: s.description || '',
-    banglaDesc: s.bangla_desc || '',
     department: s.department || '',
     semester: s.semester || 1,
     departmentId: s.department_id,
@@ -148,8 +130,7 @@ function normalizeChapter(c) {
 function normalizeQuestion(q) {
   if (!q) return null;
   return {
-    id: q.id,
-    type: q.type,
+    id: q.id, type: q.type,
     subjectId: q.subject_id,
     chapterId: q.chapter_id,
     question: q.question,
@@ -218,9 +199,7 @@ function normalizePdf(p) {
 function normalizeNotice(n) {
   if (!n) return null;
   return {
-    id: n.id,
-    title: n.title,
-    content: n.content,
+    id: n.id, title: n.title, content: n.content,
     audience: n.audience || 'all',
     departmentId: n.department_id,
     publishedAt: n.published_at,
@@ -251,7 +230,7 @@ function syncBackSettings(deptId, semId, semNumber) {
     const raw = JSON.parse(localStorage.getItem("diplomastudy_settings") || "{}");
     if (deptId) { raw.departmentId = deptId; raw.department = deptId; }
     if (semId) { raw.semesterId = semId; raw.semester = semId; }
-    if (semNumber) { raw.semesterNumber = semNumber; }
+    if (semNumber) raw.semesterNumber = semNumber;
     localStorage.setItem("diplomastudy_settings", JSON.stringify(raw));
   } catch (e) {}
 }
@@ -263,13 +242,9 @@ export async function getDepartments() {
   const cacheKey = "departments";
   try {
     const { data, error } = await supabase
-      .from('departments')
-      .select('*')
-      .eq('is_active', true)
+      .from('departments').select('*').eq('is_active', true)
       .order('display_order', { ascending: true });
-
     if (error) throw error;
-
     if (data && data.length > 0) {
       const normalized = data.map(normalizeDepartment);
       saveCache(cacheKey, normalized);
@@ -277,7 +252,6 @@ export async function getDepartments() {
     }
     return getCache(cacheKey) || [];
   } catch (err) {
-    console.warn('[API] getDepartments failed, using cache:', err.message);
     return getCache(cacheKey) || [];
   }
 }
@@ -285,16 +259,10 @@ export async function getDepartments() {
 export async function getDepartmentById(id) {
   if (!id) return null;
   try {
-    const { data, error } = await supabase
-      .from('departments')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
+    const { data, error } = await supabase.from('departments').select('*').eq('id', id).maybeSingle();
     if (error) throw error;
     return normalizeDepartment(data);
-  } catch (err) {
-    return null;
-  }
+  } catch (err) { return null; }
 }
 
 // ═══════════════════════════════════════════
@@ -305,44 +273,32 @@ export async function getSemestersByDepartment(deptId) {
   const cacheKey = "semesters_" + deptId;
   try {
     const { data, error } = await supabase
-      .from('semesters')
-      .select('*')
-      .eq('department_id', deptId)
-      .eq('is_active', true)
+      .from('semesters').select('*').eq('department_id', deptId).eq('is_active', true)
       .order('number', { ascending: true });
-
     if (error) throw error;
-
     if (data && data.length > 0) {
       const normalized = data.map(normalizeSemester);
       saveCache(cacheKey, normalized);
       return normalized;
     }
     return getCache(cacheKey) || [];
-  } catch (err) {
-    return getCache(cacheKey) || [];
-  }
+  } catch (err) { return getCache(cacheKey) || []; }
 }
 
 export async function getAllSemesters() {
   const cacheKey = "semesters_all";
   try {
     const { data, error } = await supabase
-      .from('semesters')
-      .select('*')
-      .eq('is_active', true)
+      .from('semesters').select('*').eq('is_active', true)
       .order('number', { ascending: true });
     if (error) throw error;
-
     if (data && data.length > 0) {
       const normalized = data.map(normalizeSemester);
       saveCache(cacheKey, normalized);
       return normalized;
     }
     return getCache(cacheKey) || [];
-  } catch (err) {
-    return getCache(cacheKey) || [];
-  }
+  } catch (err) { return getCache(cacheKey) || []; }
 }
 
 // ═══════════════════════════════════════════
@@ -392,14 +348,9 @@ export async function getSubjectsByAssignment(deptId, semId) {
   const cacheKey = `subjects_${deptId}_${semId || 'all'}`;
 
   try {
-    let query = supabase
-      .from('subject_assignments')
-      .select('subject_id')
-      .eq('department_id', deptId)
-      .eq('is_active', true);
-
+    let query = supabase.from('subject_assignments').select('subject_id')
+      .eq('department_id', deptId).eq('is_active', true);
     if (semId) query = query.eq('semester_id', semId);
-
     const { data: assignments, error: aErr } = await query;
     if (aErr) throw aErr;
 
@@ -416,13 +367,9 @@ export async function getSubjectsByAssignment(deptId, semId) {
       return getCache(cacheKey) || [];
     }
 
-    const { data, error } = await supabase
-      .from('subjects')
-      .select('*')
-      .in('id', subjectIds)
-      .eq('is_active', true)
+    const { data, error } = await supabase.from('subjects').select('*')
+      .in('id', subjectIds).eq('is_active', true)
       .order('display_order', { ascending: true });
-
     if (error) throw error;
 
     if (data && data.length > 0) {
@@ -431,9 +378,7 @@ export async function getSubjectsByAssignment(deptId, semId) {
       return normalized;
     }
     return getCache(cacheKey) || [];
-  } catch (err) {
-    return getCache(cacheKey) || [];
-  }
+  } catch (err) { return getCache(cacheKey) || []; }
 }
 
 export async function getSubjectById(id) {
@@ -452,15 +397,10 @@ export async function getChaptersBySubject(subjectId) {
   if (!subjectId) return [];
   const cacheKey = "chapters_" + subjectId;
   try {
-    const { data, error } = await supabase
-      .from('chapters')
-      .select('*')
-      .eq('subject_id', subjectId)
-      .eq('is_active', true)
+    const { data, error } = await supabase.from('chapters').select('*')
+      .eq('subject_id', subjectId).eq('is_active', true)
       .order('sort_order', { ascending: true });
-
     if (error) throw error;
-
     if (data && data.length > 0) {
       const normalized = data.map(normalizeChapter);
       saveCache(cacheKey, normalized);
@@ -468,17 +408,6 @@ export async function getChaptersBySubject(subjectId) {
     }
     return getCache(cacheKey) || [];
   } catch (err) { return getCache(cacheKey) || []; }
-}
-
-export async function getChaptersByCategory(subjectId) {
-  const chapters = await getChaptersBySubject(subjectId);
-  const groups = {};
-  chapters.forEach((c) => {
-    const key = c.category || "__uncategorized__";
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(c);
-  });
-  return groups;
 }
 
 export async function getChapterById(chapterId) {
@@ -497,11 +426,8 @@ export async function getQuestionsByChapter(chapterId, type = null) {
   if (!chapterId) return [];
   const cacheKey = 'questions_' + chapterId + (type ? '_' + type : '');
   try {
-    let query = supabase
-      .from('questions')
-      .select('*')
-      .eq('chapter_id', chapterId)
-      .eq('is_active', true)
+    let query = supabase.from('questions').select('*')
+      .eq('chapter_id', chapterId).eq('is_active', true)
       .order('created_at', { ascending: false });
     if (type) query = query.eq('type', type);
     const { data, error } = await query;
@@ -522,11 +448,8 @@ export async function getSuggestionsByChapter(chapterId) {
   if (!chapterId) return [];
   const cacheKey = 'suggestions_' + chapterId;
   try {
-    const { data, error } = await supabase
-      .from('suggestions')
-      .select('*')
-      .eq('chapter_id', chapterId)
-      .eq('is_active', true)
+    const { data, error } = await supabase.from('suggestions').select('*')
+      .eq('chapter_id', chapterId).eq('is_active', true)
       .order('created_at', { ascending: false });
     if (error) throw error;
     if (data && data.length > 0) {
@@ -541,11 +464,8 @@ export async function getSuggestionsByChapter(chapterId) {
 export async function getSuggestionsBySubject(subjectId) {
   if (!subjectId) return [];
   try {
-    const { data, error } = await supabase
-      .from('suggestions')
-      .select('*')
-      .eq('subject_id', subjectId)
-      .eq('is_active', true)
+    const { data, error } = await supabase.from('suggestions').select('*')
+      .eq('subject_id', subjectId).eq('is_active', true)
       .order('created_at', { ascending: false });
     if (error) throw error;
     return (data || []).map(normalizeSuggestion);
@@ -559,11 +479,8 @@ export async function getFormulasByChapter(chapterId) {
   if (!chapterId) return [];
   const cacheKey = 'formulas_' + chapterId;
   try {
-    const { data, error } = await supabase
-      .from('formulas')
-      .select('*')
-      .eq('chapter_id', chapterId)
-      .eq('is_active', true)
+    const { data, error } = await supabase.from('formulas').select('*')
+      .eq('chapter_id', chapterId).eq('is_active', true)
       .order('created_at', { ascending: false });
     if (error) throw error;
     if (data && data.length > 0) {
@@ -582,11 +499,8 @@ export async function getPdfsByChapter(chapterId) {
   if (!chapterId) return [];
   const cacheKey = 'pdfs_' + chapterId;
   try {
-    const { data, error } = await supabase
-      .from('pdfs')
-      .select('*')
-      .eq('chapter_id', chapterId)
-      .eq('is_active', true)
+    const { data, error } = await supabase.from('pdfs').select('*')
+      .eq('chapter_id', chapterId).eq('is_active', true)
       .order('created_at', { ascending: false });
     if (error) throw error;
     if (data && data.length > 0) {
@@ -601,11 +515,8 @@ export async function getPdfsByChapter(chapterId) {
 export async function getPdfsBySubject(subjectId) {
   if (!subjectId) return [];
   try {
-    const { data, error } = await supabase
-      .from('pdfs')
-      .select('*')
-      .eq('subject_id', subjectId)
-      .eq('is_active', true)
+    const { data, error } = await supabase.from('pdfs').select('*')
+      .eq('subject_id', subjectId).eq('is_active', true)
       .order('created_at', { ascending: false });
     if (error) throw error;
     return (data || []).map(normalizePdf);
@@ -618,11 +529,8 @@ export async function getPdfsBySubject(subjectId) {
 export async function getNotices(deptId = null) {
   const cacheKey = "notices_" + (deptId || "all");
   try {
-    const { data, error } = await supabase
-      .from('notices')
-      .select('*')
-      .eq('is_active', true)
-      .eq('is_published', true)
+    const { data, error } = await supabase.from('notices').select('*')
+      .eq('is_active', true).eq('is_published', true)
       .order('published_at', { ascending: false });
     if (error) throw error;
 
@@ -640,18 +548,15 @@ export async function getNotices(deptId = null) {
 }
 
 // ═══════════════════════════════════════════
-// SEARCH
+// SEARCH (simple)
 // ═══════════════════════════════════════════
 export async function searchContent(query) {
   if (!query || query.length < 2) return [];
   const q = query.toLowerCase();
   try {
-    const { data: subData } = await supabase
-      .from('subjects').select('*').eq('is_active', true)
+    const { data: subData } = await supabase.from('subjects').select('*').eq('is_active', true)
       .or(`name.ilike.%${q}%,bangla_name.ilike.%${q}%,code.ilike.%${q}%`).limit(5);
-
-    const { data: chData } = await supabase
-      .from('chapters').select('*').eq('is_active', true)
+    const { data: chData } = await supabase.from('chapters').select('*').eq('is_active', true)
       .or(`name.ilike.%${q}%,name_en.ilike.%${q}%,category.ilike.%${q}%`).limit(8);
 
     const results = [];
@@ -666,6 +571,4 @@ export async function searchContent(query) {
   } catch (err) { return []; }
 }
 
-export { clearCache as clearAllCache };
-
-console.log('[User App] ✅ API Service v3 loaded');
+console.log('[User App] ✅ API Service loaded');

@@ -1,7 +1,7 @@
 /**
- * DiplomaStudy - Main Bootstrap v5
+ * DiplomaStudy - Main Bootstrap v7
  * Bulletproof — visible error reporting
- * Registers all pages dynamically
+ * Registers ALL pages dynamically
  */
 
 console.log("[Main] 📥 Script started");
@@ -56,7 +56,7 @@ async function safeImport(path, name) {
 async function boot() {
   console.log("[Main] 🚀 Booting...");
 
-  // 1. Load CORE (must have)
+  // 1. Load CORE
   const AppShellMod = await safeImport("./components/AppShell.js", "AppShell");
   const routerMod = await safeImport("./core/router.js", "router");
   const storageMod = await safeImport("./core/storage.js", "storage");
@@ -70,7 +70,7 @@ async function boot() {
   const { router } = routerMod;
   const { storage, STORAGE_KEYS } = storageMod || {};
 
-  // 2. Load all PAGE modules (each in try/catch)
+  // 2. Load ALL PAGE modules
   const [
     onboardingMod,
     homeMod,
@@ -92,7 +92,15 @@ async function boot() {
     comingSoonMod,
     moreMod,
     searchMod,
-    settingsMod
+    settingsMod,
+    bookmarksMod,
+    progressMod,
+    notesMod,
+    plannerMod,
+    timerMod,
+    jobsMod,
+    aiMod,
+    toolsMod
   ] = await Promise.all([
     safeImport("./pages/Onboarding.js", "Onboarding"),
     safeImport("./pages/Home.js", "Home"),
@@ -114,7 +122,15 @@ async function boot() {
     safeImport("./pages/ComingSoon.js", "ComingSoon"),
     safeImport("./pages/More.js", "More"),
     safeImport("./pages/Search.js", "Search"),
-    safeImport("./pages/Settings.js", "Settings")
+    safeImport("./pages/Settings.js", "Settings"),
+    safeImport("./pages/Bookmarks.js", "Bookmarks"),
+    safeImport("./pages/Progress.js", "Progress"),
+    safeImport("./pages/Notes.js", "Notes"),
+    safeImport("./pages/Planner.js", "Planner"),
+    safeImport("./pages/Timer.js", "Timer"),
+    safeImport("./pages/Jobs.js", "Jobs"),
+    safeImport("./pages/AiAssistant.js", "AiAssistant"),
+    safeImport("./pages/Tools.js", "Tools")
   ]);
 
   // 3. Init AppShell
@@ -136,27 +152,50 @@ async function boot() {
     console.log(`[Main] ✅ Route ${hash} registered`);
   }
 
+  // ─── Entry / Core ───
   reg("#/onboarding", onboardingMod, "renderOnboarding");
   reg("#/home", homeMod, "renderHome");
+
+  // ─── Navigation ───
   reg("#/departments", departmentsMod, "renderDepartments");
   reg("#/semesters", semestersMod, "renderSemesters");
   reg("#/semester", semesterDetailMod, "renderSemesterDetail");
   reg("#/subjects", subjectsMod, "renderSubjects");
   reg("#/subject", subjectDetailMod, "renderSubjectDetail");
   reg("#/chapters", chaptersMod, "renderChapters");
+
+  // ─── Content ───
   reg("#/content", contentViewMod, "renderContentView");
-  reg("#/pdf-viewer", pdfViewerMod, "renderPdfViewer");
-  reg("#/dept-pdf", deptPdfMod, "renderDepartmentPDF");
-  reg("#/pdfs", pdfLibraryMod, "renderPdfLibrary");
   reg("#/questions", questionsMod, "renderQuestions");
   reg("#/suggestions", suggestionsMod, "renderSuggestions");
   reg("#/formulas", formulaMod, "renderFormula");
   reg("#/notices", noticesMod, "renderNotices");
   reg("#/quiz", quizMod, "renderQuiz");
-  reg("#/coming-soon", comingSoonMod, "renderComingSoon");
+
+  // ─── PDFs ───
+  reg("#/pdfs", pdfLibraryMod, "renderPdfLibrary");
+  reg("#/pdf-viewer", pdfViewerMod, "renderPdfViewer");
+  reg("#/dept-pdf", deptPdfMod, "renderDepartmentPDF");
+
+  // ─── Personal ───
+  reg("#/bookmarks", bookmarksMod, "renderBookmarks");
+  reg("#/progress", progressMod, "renderProgress");
+  reg("#/notes", notesMod, "renderNotes");
+  reg("#/planner", plannerMod, "renderPlanner");
+  reg("#/timer", timerMod, "renderTimer");
+
+  // ─── Tools ───
+  reg("#/tools", toolsMod, "renderTools");
+
+  // ─── Future / Coming Soon ───
+  reg("#/jobs", jobsMod, "renderJobs");
+  reg("#/ai", aiMod, "renderAiAssistant");
+
+  // ─── System ───
   reg("#/more", moreMod, "renderMore");
   reg("#/search", searchMod, "renderSearch");
   reg("#/settings", settingsMod, "renderSettings");
+  reg("#/coming-soon", comingSoonMod, "renderComingSoon");
 
   // 5. Entry point
   if (!window.location.hash) {
@@ -178,9 +217,11 @@ async function boot() {
     return;
   }
 
-  // 7. Service worker
+  // 7. Service worker (offline support)
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js").catch((err) => {
+    navigator.serviceWorker.register("./sw.js").then((reg) => {
+      console.log("[SW] Registered:", reg.scope);
+    }).catch((err) => {
       console.warn("[SW] Registration failed:", err);
     });
   }
@@ -195,7 +236,10 @@ async function boot() {
       if (realtimeMod.onContentChange) {
         realtimeMod.onContentChange((event) => {
           const currentHash = (window.location.hash || "#/home").split("?")[0];
-          const safeRoutes = ["#/home", "#/subjects", "#/notices", "#/departments", "#/semesters"];
+          const safeRoutes = [
+            "#/home", "#/subjects", "#/notices", "#/departments",
+            "#/semesters", "#/bookmarks", "#/progress", "#/formulas", "#/pdfs"
+          ];
           if (safeRoutes.includes(currentHash)) {
             setTimeout(() => window.dispatchEvent(new Event("hashchange")), 800);
           }
@@ -206,7 +250,17 @@ async function boot() {
     console.warn("[Main] Realtime skipped:", err);
   }
 
+  // 9. Global error catcher
+  window.addEventListener("error", (e) => {
+    console.error("[Global Error]", e.error || e.message);
+  });
+
+  window.addEventListener("unhandledrejection", (e) => {
+    console.error("[Unhandled Promise]", e.reason);
+  });
+
   console.log("[Main] ✅ Boot complete");
+  console.log("[Main] Routes registered:", Object.keys(router.routes || router.handlers || {}).length);
 }
 
 // ═══════════════════════════════════════════

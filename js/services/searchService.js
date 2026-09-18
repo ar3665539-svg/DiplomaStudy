@@ -1,122 +1,149 @@
 /**
- * DiplomaStudy - Global Search Service
- * Fast in-memory search across subjects, questions, suggestions, PDFs, formulas, jobs, notices, and notes
+ * DiplomaStudy - Search Service
+ * Global content search
  */
 
-import { subjects } from "../../data/subjects.js";
-import { questions } from "../../data/questions.js";
-import { suggestions } from "../../data/suggestions.js";
-import { pdfs } from "../../data/pdfs.js";
-import { formulas } from "../../data/formulas.js";
-import { jobs } from "../../data/jobs.js";
-import { notices } from "../../data/notices.js";
-import { storage, STORAGE_KEYS } from "../core/storage.js";
+import {
+  getSubjects,
+  getChaptersBySubject,
+  getPdfsBySubject,
+  getSuggestionsBySubject,
+  getFormulasByChapter
+} from "./api.js";
 
-export function globalSearch(query) {
-  if (!query || typeof query !== "string") return [];
-  const q = query.toLowerCase().trim();
-  const results = [];
+export const searchService = {
+  /**
+   * Global search across all content types
+   */
+  async search(query, options = {}) {
+    const q = (query || "").toLowerCase().trim();
+    if (q.length < 2) return [];
 
-  // Search Subjects
-  subjects.forEach((s) => {
-    if (s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q) || s.description.toLowerCase().includes(q)) {
-      results.push({
-        type: "Subject",
-        title: `${s.name} (${s.code})`,
-        subtitle: `Semester ${s.semesterId}`,
-        route: `#/chapters?subjectId=${s.id}`
-      });
+    const { types = ["subject", "chapter", "pdf", "suggestion"], limit = 30 } = options;
+    const results = [];
+
+    try {
+      // Subjects
+      if (types.includes("subject")) {
+        const subjects = await getSubjects();
+        subjects.forEach((s) => {
+          if (
+            (s.name || "").toLowerCase().includes(q) ||
+            (s.banglaName || "").toLowerCase().includes(q) ||
+            (s.code || "").toLowerCase().includes(q)
+          ) {
+            results.push({
+              type: "subject",
+              id: s.id,
+              title: s.name,
+              subtitle: s.code || s.banglaName,
+              icon: s.icon || "📘",
+              route: `#/subject?subjectId=${s.id}`
+            });
+          }
+        });
+      }
+
+      // Chapters (from subjects)
+      if (types.includes("chapter")) {
+        const subjects = await getSubjects();
+        for (const sub of subjects) {
+          const chapters = await getChaptersBySubject(sub.id);
+          chapters.forEach((c) => {
+            if (
+              (c.name || "").toLowerCase().includes(q) ||
+              (c.nameEn || "").toLowerCase().includes(q) ||
+              (c.category || "").toLowerCase().includes(q)
+            ) {
+              results.push({
+                type: "chapter",
+                id: c.id,
+                title: c.name,
+                subtitle: `${sub.name} • ${c.category || ""}`,
+                icon: c.icon || "📖",
+                route: `#/content?subjectId=${sub.id}&chapterId=${c.id}`
+              });
+            }
+          });
+        }
+      }
+
+      // PDFs
+      if (types.includes("pdf")) {
+        const subjects = await getSubjects();
+        for (const sub of subjects) {
+          const pdfs = await getPdfsBySubject(sub.id);
+          pdfs.forEach((p) => {
+            if (
+              (p.title || "").toLowerCase().includes(q) ||
+              (p.fileName || "").toLowerCase().includes(q)
+            ) {
+              results.push({
+                type: "pdf",
+                id: p.id,
+                title: p.title,
+                subtitle: `${sub.name} • ${p.fileSize || ""}`,
+                icon: "📄",
+                route: p.fileUrl ? p.fileUrl : `#/pdfs`
+              });
+            }
+          });
+        }
+      }
+
+      // Suggestions
+      if (types.includes("suggestion")) {
+        const subjects = await getSubjects();
+        for (const sub of subjects) {
+          const sug = await getSuggestionsBySubject(sub.id);
+          sug.forEach((s) => {
+            if (
+              (s.title || "").toLowerCase().includes(q) ||
+              (s.summary || "").toLowerCase().includes(q)
+            ) {
+              results.push({
+                type: "suggestion",
+                id: s.id,
+                title: s.title,
+                subtitle: `${sub.name} • ${s.category || ""}`,
+                icon: "💡",
+                route: `#/suggestions`
+              });
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("[Search] Error:", e);
     }
-  });
 
-  // Search Questions
-  questions.forEach((qu) => {
-    if (
-      qu.question.toLowerCase().includes(q) ||
-      (qu.questionBangla && qu.questionBangla.toLowerCase().includes(q)) ||
-      qu.answer.toLowerCase().includes(q)
-    ) {
-      results.push({
-        type: "Question",
-        title: qu.question,
-        subtitle: `${qu.type.toUpperCase()} • ${qu.difficulty}`,
-        route: `#/questions?subjectId=${qu.subjectId}&chapterId=${qu.chapterId}`
-      });
-    }
-  });
+    return results.slice(0, limit);
+  },
 
-  // Search Formulas
-  formulas.forEach((f) => {
-    if (f.name.toLowerCase().includes(q) || f.formula.toLowerCase().includes(q) || f.category.toLowerCase().includes(q)) {
-      results.push({
-        type: "Formula",
-        title: `${f.name}: ${f.formula}`,
-        subtitle: f.category,
-        route: "#/formula"
-      });
-    }
-  });
+  /**
+   * Save recent searches
+   */
+  saveRecent(query) {
+    try {
+      const key = "diplomastudy_recent_searches";
+      const raw = localStorage.getItem(key);
+      let list = raw ? JSON.parse(raw) : [];
+      list = [query, ...list.filter((x) => x !== query)].slice(0, 10);
+      localStorage.setItem(key, JSON.stringify(list));
+    } catch (e) {}
+  },
 
-  // Search Suggestions
-  suggestions.forEach((sg) => {
-    if (sg.title.toLowerCase().includes(q) || sg.summary.toLowerCase().includes(q)) {
-      results.push({
-        type: "Suggestion",
-        title: sg.title,
-        subtitle: sg.category,
-        route: "#/suggestions"
-      });
-    }
-  });
+  getRecent() {
+    try {
+      const raw = localStorage.getItem("diplomastudy_recent_searches");
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) { return []; }
+  },
 
-  // Search PDFs
-  pdfs.forEach((p) => {
-    if (p.title.toLowerCase().includes(q) || p.category.toLowerCase().includes(q)) {
-      results.push({
-        type: "PDF Document",
-        title: p.title,
-        subtitle: `${p.category} • ${p.pages} pages`,
-        route: "#/pdfs"
-      });
-    }
-  });
+  clearRecent() {
+    try { localStorage.removeItem("diplomastudy_recent_searches"); }
+    catch (e) {}
+  }
+};
 
-  // Search Jobs
-  jobs.forEach((j) => {
-    if (j.title.toLowerCase().includes(q) || j.organization.toLowerCase().includes(q) || j.technology.toLowerCase().includes(q)) {
-      results.push({
-        type: "Job Opportunity",
-        title: j.title,
-        subtitle: j.organization,
-        route: "#/jobs"
-      });
-    }
-  });
-
-  // Search Notices
-  notices.forEach((n) => {
-    if (n.title.toLowerCase().includes(q) || n.description.toLowerCase().includes(q)) {
-      results.push({
-        type: "Notice",
-        title: n.title,
-        subtitle: `${n.category} • ${n.date}`,
-        route: "#/notices"
-      });
-    }
-  });
-
-  // Search User Notes
-  const userNotes = storage.get(STORAGE_KEYS.NOTES, []);
-  userNotes.forEach((note) => {
-    if (note.title.toLowerCase().includes(q) || note.content.toLowerCase().includes(q)) {
-      results.push({
-        type: "My Note",
-        title: note.title,
-        subtitle: note.subjectTag || "Personal",
-        route: "#/notes"
-      });
-    }
-  });
-
-  return results;
-}
+export default searchService;

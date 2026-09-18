@@ -1,5 +1,5 @@
 /**
- * DiplomaStudy User App - Supabase Client
+ * DiplomaStudy - Supabase Client
  */
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
@@ -11,7 +11,12 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
     persistSession: false,
     autoRefreshToken: false
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 5
+    }
   }
 });
 
-console.log('[User App] ✅ Supabase connected to:', SUPABASE_URL);
+console.log('[Supabase] ✅ Client initialized:', SUPABASE_URL);

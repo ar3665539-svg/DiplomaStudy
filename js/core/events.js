@@ -1,38 +1,41 @@
 /**
- * DiplomaStudy - Event Bus
- * Lightweight publish/subscribe pattern for decoupling components
+ * DiplomaStudy - Simple Event Bus
  */
 
-class EventBus {
-  constructor() {
-    this.listeners = new Map();
-  }
+const listeners = new Map();
 
-  on(event, callback) {
-    if (!this.listeners.has(event)) {
-      this.listeners.set(event, new Set());
-    }
-    this.listeners.get(event).add(callback);
-    return () => this.off(event, callback);
-  }
+export const events = {
+  on(eventName, callback) {
+    if (!listeners.has(eventName)) listeners.set(eventName, new Set());
+    listeners.get(eventName).add(callback);
+    return () => this.off(eventName, callback);
+  },
 
-  off(event, callback) {
-    if (this.listeners.has(event)) {
-      this.listeners.get(event).delete(callback);
-    }
-  }
+  off(eventName, callback) {
+    if (!listeners.has(eventName)) return;
+    listeners.get(eventName).delete(callback);
+  },
 
-  emit(event, data) {
-    if (this.listeners.has(event)) {
-      this.listeners.get(event).forEach((cb) => {
-        try {
-          cb(data);
-        } catch (err) {
-          console.error(`[EventBus] Error in listener for ${event}:`, err);
-        }
-      });
-    }
-  }
-}
+  emit(eventName, data) {
+    if (!listeners.has(eventName)) return;
+    listeners.get(eventName).forEach((cb) => {
+      try { cb(data); } catch (e) { console.warn(`[Events] ${eventName} error:`, e); }
+    });
+  },
 
-export const events = new EventBus();
+  clear(eventName) {
+    if (eventName) listeners.delete(eventName);
+    else listeners.clear();
+  }
+};
+
+// Event name constants
+export const EVENTS = {
+  CONTENT_CHANGED: "content:changed",
+  SELECTION_CHANGED: "selection:changed",
+  THEME_CHANGED: "theme:changed",
+  ONLINE: "network:online",
+  OFFLINE: "network:offline"
+};
+
+export default events;

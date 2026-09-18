@@ -1,75 +1,40 @@
 /**
- * DiplomaStudy - ProgressCard Component
- * Pure HTML/CSS statistics and progress overview
+ * ProgressCard — Reusable progress display
  */
 
 export const ProgressCard = {
-  render({ streak = 5, totalHours = 14.5, quizAccuracy = 82, completedTasks = 12 } = {}) {
+  render({ title, subtitle = "", current = 0, total = 100, percent = null, color = "#10B981" } = {}) {
+    const p = percent !== null ? percent : (total > 0 ? Math.round((current / total) * 100) : 0);
+
     return `
-      <div class="card mb-md" id="progress-overview-card">
-        <div class="flex items-center justify-between mb-sm">
-          <h3 class="text-base font-bold text-forest">Study Statistics</h3>
-          <span class="badge badge-success">On Track 🔥</span>
+      <div class="progress-card" style="padding:16px;background:#FFFFFF;border:1.5px solid #E1E8E1;border-radius:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13.5px;font-weight:800;color:#1C3E2C;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(title)}</div>
+            ${subtitle ? `<div style="font-size:11px;color:#84968B;font-weight:600;margin-top:2px;">${escapeHtml(subtitle)}</div>` : ""}
+          </div>
+          <div style="font-size:16px;font-weight:900;color:${color};flex-shrink:0;">${p}%</div>
         </div>
-
-        <div class="grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 14px;">
-          <div style="background-color: var(--color-surface-hover); padding: 12px; border-radius: var(--radius-sm);">
-            <span class="text-xs text-muted">Daily Streak</span>
-            <div class="flex items-center gap-xs mt-xs">
-              <span style="font-size: 20px;">🔥</span>
-              <span class="text-lg font-bold text-forest">${streak} Days</span>
-            </div>
-          </div>
-
-          <div style="background-color: var(--color-surface-hover); padding: 12px; border-radius: var(--radius-sm);">
-            <span class="text-xs text-muted">Quiz Accuracy</span>
-            <div class="flex items-center gap-xs mt-xs">
-              <span style="font-size: 20px;">🎯</span>
-              <span class="text-lg font-bold text-forest">${quizAccuracy}%</span>
-            </div>
-          </div>
-
-          <div style="background-color: var(--color-surface-hover); padding: 12px; border-radius: var(--radius-sm);">
-            <span class="text-xs text-muted">Total Study Time</span>
-            <div class="flex items-center gap-xs mt-xs">
-              <span style="font-size: 20px;">⏱️</span>
-              <span class="text-lg font-bold text-forest">${totalHours} hrs</span>
-            </div>
-          </div>
-
-          <div style="background-color: var(--color-surface-hover); padding: 12px; border-radius: var(--radius-sm);">
-            <span class="text-xs text-muted">Tasks Finished</span>
-            <div class="flex items-center gap-xs mt-xs">
-              <span style="font-size: 20px;">✅</span>
-              <span class="text-lg font-bold text-forest">${completedTasks} Tasks</span>
-            </div>
-          </div>
+        <div style="height:6px;background:#E8EFE8;border-radius:999px;overflow:hidden;">
+          <div style="height:100%;width:${p}%;background:linear-gradient(90deg, ${color}, ${adjustColor(color, -20)});border-radius:999px;transition:width 0.6s cubic-bezier(0.34,1.56,0.64,1);"></div>
         </div>
-
-        <!-- Weekly Activity Mini Chart -->
-        <div>
-          <div class="flex items-center justify-between text-xs text-muted mb-xs">
-            <span>Weekly Focus Activity</span>
-            <span>4.2 hrs avg/day</span>
-          </div>
-          <div class="flex items-end justify-between" style="height: 52px; padding: 0 4px; gap: 6px;">
-            ${[
-              { day: "Sat", height: "45%" },
-              { day: "Sun", height: "70%" },
-              { day: "Mon", height: "85%" },
-              { day: "Tue", height: "60%" },
-              { day: "Wed", height: "90%" },
-              { day: "Thu", height: "100%", active: true },
-              { day: "Fri", height: "50%" }
-            ].map((d) => `
-              <div class="flex flex-col items-center flex-1" style="height: 100%; justify-content: flex-end; gap: 4px;">
-                <div style="width: 100%; height: ${d.height}; background-color: ${d.active ? "var(--color-forest)" : "var(--color-sage)"}; border-radius: 3px 3px 0 0;"></div>
-                <span style="font-size: 10px; color: var(--color-text-dim);">${d.day}</span>
-              </div>
-            `).join("")}
-          </div>
-        </div>
+        ${total > 0 ? `<div style="font-size:10.5px;color:#84968B;font-weight:600;margin-top:6px;">${current} / ${total}</div>` : ""}
       </div>
     `;
   }
 };
+
+function adjustColor(hex, amount) {
+  try {
+    const num = parseInt(hex.replace("#", ""), 16);
+    const r = Math.min(255, Math.max(0, (num >> 16) + amount));
+    const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + amount));
+    const b = Math.min(255, Math.max(0, (num & 0x0000FF) + amount));
+    return "#" + ((r << 16) | (g << 8) | b).toString(16).padStart(6, "0");
+  } catch (e) { return hex; }
+}
+
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}

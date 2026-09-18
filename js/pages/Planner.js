@@ -1,196 +1,119 @@
 /**
- * DiplomaStudy - Study Planner Page View
+ * Planner — Daily study tasks (localStorage)
  */
 
 import { AppShell } from "../components/AppShell.js";
-import { plannerService } from "../features/planner/plannerService.js";
-import { Modal } from "../components/Modal.js";
+import { emptyState } from "../utils/errorState.js";
+import { Toast } from "../components/Toast.js";
+
+const STORAGE_KEY = "diplomastudy_planner";
+
+function loadTasks() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+function saveTasks(tasks) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); } catch (e) {}
+}
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export function renderPlanner() {
   AppShell.updateHeader({
-    title: "Study Planner & Routine",
-    subtitle: "Exam schedule & task manager",
+    title: "Study Planner",
+    subtitle: "Today's tasks",
     showBack: true,
-    showSearch: false
+    showSearch: false,
+    showTheme: true,
+    showSettings: false
   });
 
   const main = AppShell.getMainView();
   if (!main) return;
 
-  let currentFilter = "today";
+  function render() {
+    const all = loadTasks();
+    const today = all.filter((t) => t.date === todayKey()).sort((a, b) => a.done - b.done);
+    const doneCount = today.filter((t) => t.done).length;
 
-  const renderTaskList = () => {
-    const listEl = main.querySelector("#planner-task-list");
-    if (!listEl) return;
-
-    const tasks = plannerService.getByFilter(currentFilter);
-
-    if (tasks.length === 0) {
-      listEl.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">📅</div>
-          <h2 class="empty-state-title">No Tasks in this view</h2>
-          <p class="empty-state-desc">Create your study target for today or tomorrow using the button above.</p>
-        </div>
-      `;
-      return;
-    }
-
-    listEl.innerHTML = tasks.map((t) => {
-      const pColor = t.priority === "High" ? "badge-danger" : t.priority === "Low" ? "badge-sage" : "badge-warning";
-      return `
-        <div class="card mb-sm p-md ${t.isCompleted ? "opacity-75" : ""}" data-id="${t.id}" id="task-item-${t.id}">
-          <div class="flex items-start justify-between mb-xs">
-            <div class="flex items-center gap-xs flex-wrap">
-              <span class="badge ${pColor}">${t.priority}</span>
-              <span class="badge badge-forest">${t.subject}</span>
-              <span class="text-xs text-dim">⏰ ${t.startTime} (${t.durationMinutes}m)</span>
+    main.innerHTML = `
+      <div style="padding:20px;background:linear-gradient(135deg, #163524 0%, #1F4A32 100%);border-radius:20px;margin-bottom:20px;color:#FFFFFF;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,rgba(200,122,30,0.2),transparent 70%);"></div>
+        <div style="position:relative;">
+          <div style="font-size:11px;font-weight:700;opacity:0.8;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">TODAY</div>
+          <div style="font-size:18px;font-weight:900;letter-spacing:-0.3px;margin-bottom:14px;">${new Date().toLocaleDateString("bn-BD", { weekday: "long", day: "numeric", month: "long" })}</div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="flex:1;">
+              <div style="height:6px;background:rgba(255,255,255,0.2);border-radius:999px;overflow:hidden;">
+                <div style="height:100%;width:${today.length > 0 ? (doneCount / today.length) * 100 : 0}%;background:linear-gradient(90deg,#10B981,#059669);border-radius:999px;transition:width 0.4s;"></div>
+              </div>
             </div>
-            <button class="header-icon-btn btn-delete-task text-danger" data-id="${t.id}" title="Delete Task">
-              🗑️
-            </button>
-          </div>
-
-          <div class="flex items-center gap-sm mt-xs">
-            <input 
-              type="checkbox" 
-              class="chk-task-complete" 
-              data-id="${t.id}" 
-              ${t.isCompleted ? "checked" : ""} 
-              style="width: 18px; height: 18px; cursor: pointer;"
-            />
-            <p class="text-sm font-semibold text-text ${t.isCompleted ? "line-through text-muted" : ""}" style="line-height: 1.3;">
-              ${t.title}
-            </p>
-          </div>
-        </div>
-      `;
-    }).join("");
-
-    listEl.querySelectorAll(".chk-task-complete").forEach((chk) => {
-      chk.addEventListener("change", () => {
-        const id = chk.getAttribute("data-id");
-        plannerService.toggleComplete(id);
-        renderTaskList();
-      });
-    });
-
-    listEl.querySelectorAll(".btn-delete-task").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-id");
-        plannerService.deleteTask(id);
-        renderTaskList();
-      });
-    });
-  };
-
-  const openAddTaskModal = () => {
-    const todayStr = new Date().toISOString().split("T")[0];
-    const bodyHtml = `
-      <div class="flex flex-col gap-sm">
-        <div>
-          <label class="text-xs font-bold text-muted block mb-xs">Task Description</label>
-          <input 
-            type="text" 
-            id="planner-modal-title" 
-            class="search-input" 
-            placeholder="e.g., Solve 5 previous board questions of Math-1"
-          />
-        </div>
-
-        <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-          <div>
-            <label class="text-xs font-bold text-muted block mb-xs">Subject</label>
-            <input 
-              type="text" 
-              id="planner-modal-subject" 
-              class="search-input" 
-              placeholder="e.g., Basic Electricity"
-              value="Basic Electricity"
-            />
-          </div>
-          <div>
-            <label class="text-xs font-bold text-muted block mb-xs">Priority</label>
-            <select id="planner-modal-priority" class="search-input" style="padding: 10px;">
-              <option value="High">High Priority</option>
-              <option value="Medium" selected>Medium</option>
-              <option value="Low">Low</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-          <div>
-            <label class="text-xs font-bold text-muted block mb-xs">Date</label>
-            <input 
-              type="date" 
-              id="planner-modal-date" 
-              class="search-input" 
-              value="${todayStr}"
-            />
-          </div>
-          <div>
-            <label class="text-xs font-bold text-muted block mb-xs">Duration (mins)</label>
-            <input 
-              type="number" 
-              id="planner-modal-duration" 
-              class="search-input" 
-              value="45"
-            />
+            <div style="font-size:14px;font-weight:800;">${doneCount} / ${today.length}</div>
           </div>
         </div>
       </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <input type="text" id="task-input" placeholder="নতুন task লিখুন..." style="flex:1;padding:12px 14px;border-radius:12px;border:1.5px solid #E1E8E1;background:#FFFFFF;color:#1C3E2C;font-family:inherit;font-size:13.5px;font-weight:600;box-sizing:border-box;" />
+        <button id="add-task" style="padding:12px 18px;background:linear-gradient(135deg,#1C3E2C,#2A5540);color:#FFFFFF;border:none;border-radius:12px;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;flex-shrink:0;">➕</button>
+      </div>
+
+      ${today.length === 0
+        ? emptyState({ icon: "📅", title: "কোনো task নেই", message: "উপরে নতুন task যোগ করুন" })
+        : `<div style="display:flex;flex-direction:column;gap:8px;">
+            ${today.map((t) => `
+              <div style="display:flex;align-items:center;gap:12px;padding:14px;background:${t.done ? "#F8FBF8" : "#FFFFFF"};border:1.5px solid ${t.done ? "#10B981" : "#E1E8E1"};border-radius:14px;transition:all 0.2s;">
+                <button class="task-toggle" data-id="${t.id}" style="width:26px;height:26px;border-radius:8px;background:${t.done ? "#10B981" : "transparent"};border:1.5px solid ${t.done ? "#10B981" : "#CBD5E1"};color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;cursor:pointer;flex-shrink:0;padding:0;font-family:inherit;">${t.done ? "✓" : ""}</button>
+                <div style="flex:1;min-width:0;font-size:13.5px;font-weight:700;color:${t.done ? "#84968B" : "#1C3E2C"};text-decoration:${t.done ? "line-through" : "none"};line-height:1.4;">${escapeHtml(t.text)}</div>
+                <button class="task-del" data-id="${t.id}" style="width:28px;height:28px;border-radius:8px;background:#FEE2E2;border:none;color:#991B1B;cursor:pointer;font-size:12px;flex-shrink:0;">✕</button>
+              </div>
+            `).join("")}
+          </div>`
+      }
+
+      <div style="height:20px;"></div>
     `;
 
-    Modal.show({
-      title: "Add Study Routine Task",
-      bodyHtml,
-      confirmText: "Schedule Task",
-      onConfirm: () => {
-        const title = document.getElementById("planner-modal-title")?.value || "";
-        const subject = document.getElementById("planner-modal-subject")?.value || "Engineering";
-        const priority = document.getElementById("planner-modal-priority")?.value || "Medium";
-        const date = document.getElementById("planner-modal-date")?.value || todayStr;
-        const durationMinutes = document.getElementById("planner-modal-duration")?.value || 45;
-
-        if (title.trim()) {
-          plannerService.addTask({ title, subject, priority, date, durationMinutes });
-          renderTaskList();
-        }
-      }
+    main.querySelector("#add-task")?.addEventListener("click", addTask);
+    main.querySelector("#task-input")?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") addTask();
     });
-  };
-
-  main.innerHTML = `
-    <!-- Top Action Bar -->
-    <div class="flex items-center justify-between gap-sm mb-md">
-      <div class="flex items-center gap-xs overflow-x-auto" id="planner-filter-chips" style="scrollbar-width: none;">
-        <button class="badge badge-forest active p-filter-chip" data-filter="today">Today</button>
-        <button class="badge badge-sage p-filter-chip" data-filter="tomorrow">Tomorrow</button>
-        <button class="badge badge-sage p-filter-chip" data-filter="upcoming">Upcoming</button>
-        <button class="badge badge-sage p-filter-chip" data-filter="completed">Completed</button>
-      </div>
-
-      <button class="btn btn-primary btn-sm" id="btn-add-planner-task" style="white-space: nowrap;">
-        <span>+ Add</span>
-      </button>
-    </div>
-
-    <div id="planner-task-list"></div>
-  `;
-
-  main.querySelectorAll(".p-filter-chip").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      main.querySelectorAll(".p-filter-chip").forEach((c) => c.classList.remove("badge-forest", "active"));
-      main.querySelectorAll(".p-filter-chip").forEach((c) => c.classList.add("badge-sage"));
-      chip.classList.remove("badge-sage");
-      chip.classList.add("badge-forest", "active");
-      currentFilter = chip.getAttribute("data-filter");
-      renderTaskList();
+    main.querySelectorAll(".task-toggle").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-id");
+        const tasks = loadTasks().map((t) => t.id === id ? { ...t, done: !t.done } : t);
+        saveTasks(tasks);
+        render();
+      });
     });
-  });
+    main.querySelectorAll(".task-del").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-id");
+        saveTasks(loadTasks().filter((t) => t.id !== id));
+        Toast.success("🗑️ Removed");
+        render();
+      });
+    });
+  }
 
-  main.querySelector("#btn-add-planner-task")?.addEventListener("click", () => openAddTaskModal());
+  function addTask() {
+    const input = main.querySelector("#task-input");
+    const text = input?.value.trim();
+    if (!text) { Toast.warning("Task লিখুন"); return; }
+    const tasks = loadTasks();
+    tasks.push({ id: "task-" + Date.now(), text, date: todayKey(), done: false, createdAt: Date.now() });
+    saveTasks(tasks);
+    Toast.success("✅ Added");
+    render();
+  }
 
-  renderTaskList();
+  render();
+}
+
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }

@@ -1,367 +1,220 @@
 /**
- * DiplomaStudy - Quiz Hub & Active Quiz Runner View
+ * Quiz — MCQ Practice Mode
+ * Random MCQs from all chapters
  */
 
 import { AppShell } from "../components/AppShell.js";
-import { quizzes, getQuizById } from "../../data/quizzes.js";
-import { quizEngine } from "../features/quiz/quizEngine.js";
-import { events } from "../core/events.js";
-import { router } from "../core/router.js";
-import { QuizCard } from "../components/QuizCard.js";
-import { Modal } from "../components/Modal.js";
+import { getSubjects, getChaptersBySubject, getQuestionsByChapter } from "../services/api.js";
+import { emptyState } from "../utils/errorState.js";
+import { Toast } from "../components/Toast.js";
 
-export function renderQuiz(params = {}) {
-  const quizId = params.quizId;
+let quizState = null;
 
-  if (quizId) {
-    const quiz = getQuizById(quizId) || quizzes[0];
-    renderActiveQuiz(quiz);
-  } else {
-    renderQuizHub();
-  }
-}
-
-function renderQuizHub() {
+export async function renderQuiz() {
   AppShell.updateHeader({
-    title: "Practice & Mock Tests",
-    subtitle: "BTEB Pattern MCQ Quizzes",
-    showBack: false,
-    showSearch: false
+    title: "Quiz Mode",
+    subtitle: "Test your knowledge",
+    showBack: true,
+    showSearch: false,
+    showTheme: true,
+    showSettings: false
   });
 
   const main = AppShell.getMainView();
   if (!main) return;
 
-  const history = quizEngine.getHistory();
+  main.innerHTML = `<div style="text-align:center;padding:60px 20px;"><div class="spinner"></div><p style="margin-top:12px;color:#84968B;font-size:13px;">Loading MCQs...</p></div>`;
+
+  // Load all MCQs
+  let mcqs = [];
+  try {
+    const subjects = await getSubjects();
+    for (const sub of subjects) {
+      const chapters = await getChaptersBySubject(sub.id);
+      for (const ch of chapters) {
+        const qs = await getQuestionsByChapter(ch.id, "mcq");
+        qs.forEach((q) => {
+          if (q.options && q.options.length > 0 && q.answer) {
+            mcqs.push({ ...q, subjectName: sub.name, chapterName: ch.name });
+          }
+        });
+      }
+    }
+  } catch (e) {}
+
+  if (mcqs.length === 0) {
+    main.innerHTML = emptyState({
+      icon: "🎯",
+      title: "কোনো MCQ নেই",
+      message: "Admin Panel থেকে MCQ যোগ করলে quiz খেলা যাবে।",
+      actionFn: () => window.location.hash = "#/home",
+      actionLabel: "🏠 Home"
+    });
+    return;
+  }
+
+  // Shuffle + take 10
+  const shuffled = [...mcqs].sort(() => Math.random() - 0.5).slice(0, Math.min(10, mcqs.length));
+
+  quizState = {
+    questions: shuffled,
+    current: 0,
+    score: 0,
+    answers: [],
+    total: shuffled.length
+  };
+
+  renderQuestion(main);
+}
+
+function renderQuestion(main) {
+  const s = quizState;
+  if (!s) return;
+
+  if (s.current >= s.total) {
+    renderResult(main);
+    return;
+  }
+
+  const q = s.questions[s.current];
+  const progress = Math.round(((s.current) / s.total) * 100);
 
   main.innerHTML = `
-    <!-- Top Summary Banner -->
-    <div class="card mb-md p-md" style="background: linear-gradient(135deg, var(--color-forest) 0%, var(--color-forest-dark) 100%); color: #FFFFFF;">
-      <div class="flex items-center justify-between mb-xs">
-        <span class="badge" style="background-color: rgba(255, 255, 255, 0.2); color: #FFFFFF;">BTEB Exam Prep</span>
-        <span class="text-xs" style="opacity: 0.85;">Timed Mock Sets</span>
+    <div style="margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:#57675D;margin-bottom:8px;">
+        <span>প্রশ্ন ${s.current + 1} / ${s.total}</span>
+        <span>✅ ${s.score} correct</span>
       </div>
-      <h2 class="text-lg font-bold mb-xs" style="color: #FFFFFF;">Test Your Subject Mastery</h2>
-      <p class="text-xs" style="opacity: 0.9; line-height: 1.4;">Practice real semester board MCQs with instant scoring, timer feedback, and detailed step-by-step explanations.</p>
-    </div>
-
-    <!-- Quizzes List -->
-    <div class="section-header">
-      <h3 class="section-title">Available Quiz Sets</h3>
-      <span class="text-xs text-muted">${quizzes.length} Tests</span>
-    </div>
-
-    <div id="quiz-sets-container">
-      ${quizzes.map((q) => QuizCard.render(q)).join("")}
-    </div>
-
-    <!-- Recent Attempts History -->
-    ${history.length > 0 ? `
-      <div class="section-header mt-lg">
-        <h3 class="section-title">Recent Test Results</h3>
-        <span class="text-xs text-muted">Last ${history.length} attempts</span>
+      <div style="height:6px;background:#E8EFE8;border-radius:999px;overflow:hidden;">
+        <div style="height:100%;width:${progress}%;background:linear-gradient(90deg,#10B981,#059669);border-radius:999px;transition:width 0.4s;"></div>
       </div>
-      <div class="flex flex-col gap-sm" id="quiz-history-list">
-        ${history.slice(0, 5).map((h) => `
-          <div class="card p-sm">
-            <div class="flex items-center justify-between mb-xs">
-              <span class="text-xs font-bold text-forest">${h.quizTitle}</span>
-              <span class="badge ${h.accuracy >= 75 ? "badge-success" : h.accuracy >= 50 ? "badge-warning" : "badge-danger"}">${h.accuracy}%</span>
+    </div>
+
+    <div style="padding:20px;background:linear-gradient(135deg, rgba(28,62,44,0.06), transparent);border-left:4px solid #1C3E2C;border-radius:16px;margin-bottom:20px;">
+      <div style="font-size:11px;font-weight:800;color:#84968B;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;">${escapeHtml(q.subjectName)} • ${escapeHtml(q.chapterName)}</div>
+      <div style="font-size:16px;font-weight:800;color:#1C3E2C;line-height:1.5;">${escapeHtml(q.question)}</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      ${q.options.map((opt, i) => {
+        const letter = String.fromCharCode(65 + i);
+        return `
+          <button class="opt-btn" data-opt="${escapeHtml(opt)}" type="button" style="
+            display:flex;align-items:center;gap:14px;
+            padding:16px;background:#FFFFFF;
+            border:1.5px solid #E1E8E1;border-radius:14px;
+            cursor:pointer;font-family:inherit;text-align:left;width:100%;
+            transition:all 0.2s ease;
+          ">
+            <div style="width:34px;height:34px;border-radius:10px;background:#F2F5F2;color:#57675D;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0;font-family:ui-monospace,monospace;">${letter}</div>
+            <span style="flex:1;font-size:14px;font-weight:600;color:#1C3E2C;">${escapeHtml(opt)}</span>
+          </button>
+        `;
+      }).join("")}
+    </div>
+
+    <button id="quit-quiz" style="width:100%;margin-top:20px;padding:12px;background:transparent;border:1.5px solid #E1E8E1;color:#57675D;border-radius:12px;font-weight:700;font-size:12.5px;cursor:pointer;font-family:inherit;">
+      ⏹ Quit Quiz
+    </button>
+  `;
+
+  main.querySelectorAll(".opt-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const selected = btn.getAttribute("data-opt");
+      const correct = selected === q.answer;
+
+      // Disable all
+      main.querySelectorAll(".opt-btn").forEach((b) => {
+        b.disabled = true;
+        b.style.cursor = "default";
+        const optVal = b.getAttribute("data-opt");
+        if (optVal === q.answer) {
+          b.style.background = "linear-gradient(135deg,#DCFCE7,#BBF7D0)";
+          b.style.borderColor = "#10B981";
+        } else if (optVal === selected && !correct) {
+          b.style.background = "linear-gradient(135deg,#FEE2E2,#FECACA)";
+          b.style.borderColor = "#DC2626";
+        }
+      });
+
+      if (correct) s.score++;
+      s.answers.push({ q: q.question, selected, correct: q.answer, isCorrect: correct });
+
+      Toast.show(correct ? "✅ সঠিক!" : "❌ ভুল", correct ? "success" : "error", 1200);
+
+      setTimeout(() => {
+        s.current++;
+        renderQuestion(main);
+      }, 1200);
+    });
+  });
+
+  main.querySelector("#quit-quiz")?.addEventListener("click", () => {
+    if (confirm("Quiz বন্ধ করবেন?")) {
+      window.location.hash = "#/home";
+    }
+  });
+}
+
+function renderResult(main) {
+  const s = quizState;
+  const percent = Math.round((s.score / s.total) * 100);
+  const emoji = percent >= 80 ? "🏆" : percent >= 60 ? "🎯" : percent >= 40 ? "💪" : "📚";
+  const msg = percent >= 80 ? "অসাধারণ!" : percent >= 60 ? "ভালো করেছ!" : percent >= 40 ? "আরো practice দরকার" : "চালিয়ে যাও!";
+
+  main.innerHTML = `
+    <div style="text-align:center;padding:40px 20px;">
+      <div style="font-size:80px;margin-bottom:16px;">${emoji}</div>
+      <h2 style="font-size:24px;font-weight:900;color:#1C3E2C;margin:0 0 6px;">${msg}</h2>
+      <p style="font-size:14px;color:#84968B;font-weight:600;margin:0 0 24px;">${s.total}টির মধ্যে ${s.score}টি সঠিক</p>
+
+      <div style="display:inline-block;padding:20px 32px;background:linear-gradient(135deg,#DCFCE7,#BBF7D0);border-radius:20px;margin-bottom:24px;">
+        <div style="font-size:48px;font-weight:900;color:#065F46;line-height:1;">${percent}%</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;max-width:300px;margin:0 auto;">
+        <button id="retry-quiz" style="padding:14px;background:linear-gradient(135deg,#1C3E2C,#2A5540);color:#FFFFFF;border:none;border-radius:14px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;box-shadow:0 8px 20px -4px rgba(28,62,44,0.4);">
+          🔄 আবার খেলুন
+        </button>
+        <button id="go-home" style="padding:14px;background:#FFFFFF;color:#1C3E2C;border:1.5px solid #E1E8E1;border-radius:14px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;">
+          🏠 Home
+        </button>
+      </div>
+    </div>
+
+    <div style="margin-top:32px;">
+      <div style="font-size:13px;font-weight:800;color:#1C3E2C;margin-bottom:12px;">📝 Review Answers</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        ${s.answers.map((a, i) => `
+          <div style="padding:14px;background:#FFFFFF;border:1.5px solid ${a.isCorrect ? "#10B981" : "#DC2626"};border-radius:14px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <span style="font-size:18px;">${a.isCorrect ? "✅" : "❌"}</span>
+              <span style="font-size:11px;font-weight:800;color:#84968B;">প্রশ্ন ${i + 1}</span>
             </div>
-            <div class="flex items-center justify-between text-xs text-muted">
-              <span>Score: ${h.correctCount} / ${h.totalQuestions} correct</span>
-              <span>${new Date(h.date).toLocaleDateString()}</span>
+            <div style="font-size:13px;font-weight:700;color:#1C3E2C;margin-bottom:8px;line-height:1.4;">${escapeHtml(a.q)}</div>
+            <div style="font-size:12px;color:#57675D;line-height:1.5;">
+              ${!a.isCorrect ? `<div style="margin-bottom:4px;">তোমার উত্তর: <span style="color:#DC2626;font-weight:700;">${escapeHtml(a.selected)}</span></div>` : ""}
+              <div>সঠিক উত্তর: <span style="color:#10B981;font-weight:700;">${escapeHtml(a.correct)}</span></div>
             </div>
           </div>
         `).join("")}
       </div>
-    ` : ""}
+    </div>
+
+    <div style="height:20px;"></div>
   `;
 
-  QuizCard.bindEvents(main, (id) => {
-    router.navigate(`#/quiz?quizId=${id}`);
+  main.querySelector("#retry-quiz")?.addEventListener("click", () => {
+    quizState = null;
+    renderQuiz();
+  });
+  main.querySelector("#go-home")?.addEventListener("click", () => {
+    quizState = null;
+    window.location.hash = "#/home";
   });
 }
 
-function renderActiveQuiz(quiz) {
-  quizEngine.start(quiz);
-
-  AppShell.updateHeader({
-    title: quiz.title,
-    subtitle: "Active Mock Test",
-    showBack: true,
-    showSearch: false,
-    showTheme: false
-  });
-
-  const main = AppShell.getMainView();
-  if (!main) return;
-
-  const renderActiveScreen = () => {
-    if (quizEngine.isSubmitted && quizEngine.result) {
-      renderResultScreen(quizEngine.result);
-      return;
-    }
-
-    const currentQ = quiz.questions[quizEngine.currentIndex];
-    const totalQ = quiz.questions.length;
-    const selectedAns = quizEngine.userAnswers[currentQ.id];
-
-    // Format timer
-    const mins = Math.floor(quizEngine.timeRemaining / 60);
-    const secs = quizEngine.timeRemaining % 60;
-    const timerText = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-
-    main.innerHTML = `
-      <!-- Quiz Progress & Timer Header -->
-      <div class="card mb-md p-sm flex items-center justify-between" style="position: sticky; top: 58px; z-index: 10; box-shadow: var(--shadow-sm);">
-        <div class="flex items-center gap-xs">
-          <span class="badge badge-forest">Q ${quizEngine.currentIndex + 1} of ${totalQ}</span>
-        </div>
-        <div class="flex items-center gap-xs text-sm font-bold text-forest" id="quiz-timer-display">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle>
-            <polyline points="12 6 12 12 16 14"></polyline>
-          </svg>
-          <span>${timerText}</span>
-        </div>
-      </div>
-
-      <!-- Question Text -->
-      <div class="card mb-md p-md">
-        <h3 class="text-sm font-bold text-forest mb-xs" style="line-height: 1.4;">${currentQ.question}</h3>
-        ${currentQ.questionBangla ? `<p class="text-xs text-muted mb-md">${currentQ.questionBangla}</p>` : ""}
-
-        <!-- Options -->
-        <div class="flex flex-col gap-sm" id="quiz-options-group">
-          ${currentQ.options.map((opt, idx) => {
-            const letter = String.fromCharCode(65 + idx);
-            const isSelected = selectedAns === opt;
-            return `
-              <button 
-                class="quiz-option-btn card-interactive ${isSelected ? "selected" : ""}" 
-                data-option="${opt}"
-                style="
-                  display: flex; 
-                  align-items: center; 
-                  gap: 10px; 
-                  padding: 12px 14px; 
-                  border-radius: var(--radius-sm); 
-                  border: 1.5px solid ${isSelected ? "var(--color-forest)" : "var(--color-border)"}; 
-                  background-color: ${isSelected ? "var(--color-forest-soft)" : "var(--color-surface)"};
-                  text-align: left;
-                  cursor: pointer;
-                  width: 100%;
-                "
-              >
-                <span style="
-                  width: 26px; 
-                  height: 26px; 
-                  border-radius: 50%; 
-                  background-color: ${isSelected ? "var(--color-forest)" : "var(--color-surface-hover)"}; 
-                  color: ${isSelected ? "#FFFFFF" : "var(--color-text)"};
-                  font-size: 11px;
-                  font-weight: 700;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  flex-shrink: 0;
-                ">${letter}</span>
-                <span class="text-xs font-semibold text-text flex-1">${opt}</span>
-              </button>
-            `;
-          }).join("")}
-        </div>
-      </div>
-
-      <!-- Navigation & Submit Bar -->
-      <div class="flex items-center justify-between gap-sm mb-lg">
-        <button class="btn btn-secondary btn-sm flex-1" id="quiz-btn-prev" ${quizEngine.currentIndex === 0 ? "disabled" : ""}>
-          ← Previous
-        </button>
-
-        ${quizEngine.currentIndex < totalQ - 1 ? `
-          <button class="btn btn-primary btn-sm flex-1" id="quiz-btn-next">
-            Next →
-          </button>
-        ` : `
-          <button class="btn btn-accent btn-sm flex-1" id="quiz-btn-submit">
-            Finish & Submit
-          </button>
-        `}
-      </div>
-
-      <!-- Question Palette -->
-      <div class="card p-sm mb-lg">
-        <span class="text-xs font-bold text-muted mb-xs block">Question Palette</span>
-        <div class="flex flex-wrap gap-xs">
-          ${quiz.questions.map((q, idx) => {
-            const isAnswered = !!quizEngine.userAnswers[q.id];
-            const isCurrent = idx === quizEngine.currentIndex;
-            return `
-              <button 
-                class="palette-chip ${isCurrent ? "current" : ""} ${isAnswered ? "answered" : ""}" 
-                data-index="${idx}"
-                style="
-                  width: 32px; 
-                  height: 32px; 
-                  border-radius: var(--radius-xs); 
-                  border: 1px solid var(--color-border);
-                  background-color: ${isCurrent ? "var(--color-forest)" : isAnswered ? "var(--color-sage)" : "var(--color-surface)"};
-                  color: ${isCurrent ? "#FFFFFF" : isAnswered ? "var(--color-forest-dark)" : "var(--color-text)"};
-                  font-size: 11px;
-                  font-weight: 700;
-                  cursor: pointer;
-                "
-              >${idx + 1}</button>
-            `;
-          }).join("")}
-        </div>
-      </div>
-    `;
-
-    // Event listeners
-    main.querySelectorAll(".quiz-option-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const opt = btn.getAttribute("data-option");
-        quizEngine.selectAnswer(currentQ.id, opt);
-        renderActiveScreen();
-      });
-    });
-
-    main.querySelector("#quiz-btn-prev")?.addEventListener("click", () => {
-      quizEngine.prev();
-      renderActiveScreen();
-    });
-
-    main.querySelector("#quiz-btn-next")?.addEventListener("click", () => {
-      quizEngine.next();
-      renderActiveScreen();
-    });
-
-    main.querySelector("#quiz-btn-submit")?.addEventListener("click", () => {
-      Modal.show({
-        title: "Submit Test?",
-        bodyHtml: `<p class="text-xs text-muted">You have answered <strong>${Object.keys(quizEngine.userAnswers).length}</strong> of <strong>${totalQ}</strong> questions. Are you ready to see your score and answer explanations?</p>`,
-        confirmText: "Yes, Submit",
-        cancelText: "Review",
-        onConfirm: () => {
-          quizEngine.submit();
-          renderActiveScreen();
-        }
-      });
-    });
-
-    main.querySelectorAll(".palette-chip").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const idx = parseInt(btn.getAttribute("data-index"), 10);
-        quizEngine.goTo(idx);
-        renderActiveScreen();
-      });
-    });
-  };
-
-  const timerUnsub = events.on("quiz:tick", (remaining) => {
-    const timerDisplay = document.getElementById("quiz-timer-display");
-    if (timerDisplay) {
-      const mins = Math.floor(remaining / 60);
-      const secs = remaining % 60;
-      timerDisplay.innerHTML = `
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"></circle>
-          <polyline points="12 6 12 12 16 14"></polyline>
-        </svg>
-        <span>${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}</span>
-      `;
-    }
-  });
-
-  const submitUnsub = events.on("quiz:submitted", () => {
-    renderActiveScreen();
-  });
-
-  renderActiveScreen();
-}
-
-function renderResultScreen(result) {
-  const main = AppShell.getMainView();
-  if (!main) return;
-
-  const isPassed = result.accuracy >= 50;
-
-  main.innerHTML = `
-    <!-- Result Summary Card -->
-    <div class="card mb-md p-lg text-center ${isPassed ? "card-highlight" : ""}">
-      <div style="font-size: 42px; margin-bottom: 8px;">${isPassed ? "🎉" : "📚"}</div>
-      <h2 class="text-xl font-bold text-forest mb-xs">${isPassed ? "Great Effort!" : "Keep Practicing!"}</h2>
-      <p class="text-xs text-muted mb-md">${result.quizTitle}</p>
-
-      <div class="flex items-center justify-center gap-md mb-md">
-        <div>
-          <span class="text-2xl font-bold text-forest">${result.correctCount} / ${result.totalQuestions}</span>
-          <p class="text-xs text-muted">Score</p>
-        </div>
-        <div style="width: 1px; height: 36px; background-color: var(--color-border);"></div>
-        <div>
-          <span class="text-2xl font-bold ${isPassed ? "text-forest" : "text-accent"}">${result.accuracy}%</span>
-          <p class="text-xs text-muted">Accuracy</p>
-        </div>
-        <div style="width: 1px; height: 36px; background-color: var(--color-border);"></div>
-        <div>
-          <span class="text-2xl font-bold text-forest">${result.timeSpentSeconds}s</span>
-          <p class="text-xs text-muted">Time Taken</p>
-        </div>
-      </div>
-
-      <div class="flex items-center gap-sm">
-        <button class="btn btn-primary btn-sm flex-1" id="btn-retry-quiz">
-          <span>Retry Test</span>
-        </button>
-        <button class="btn btn-secondary btn-sm flex-1" id="btn-quiz-hub">
-          <span>Back to Tests</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Detailed Answer Breakdown -->
-    <div class="section-header">
-      <h3 class="section-title">Answer Breakdown & Explanations</h3>
-    </div>
-
-    <div class="flex flex-col gap-sm mb-xl">
-      ${result.breakdown.map((item, idx) => `
-        <div class="card p-md" style="border-left: 4px solid ${item.isCorrect ? "var(--color-forest)" : "var(--color-danger)}"};">
-          <div class="flex items-center justify-between mb-xs">
-            <span class="text-xs font-bold text-muted">Q ${idx + 1}</span>
-            <span class="badge ${item.isCorrect ? "badge-success" : "badge-danger"}">${item.isCorrect ? "Correct (+1)" : "Incorrect (0)"}</span>
-          </div>
-          <p class="text-sm font-semibold text-text mb-sm">${item.questionText}</p>
-
-          <div class="p-xs mb-xs" style="background-color: var(--color-surface-hover); border-radius: var(--radius-xs);">
-            <span class="text-xs text-dim block">Your Answer:</span>
-            <span class="text-xs font-bold ${item.isCorrect ? "text-forest" : "text-danger"}">${item.selectedOption || "Not Answered"}</span>
-          </div>
-
-          <div class="p-xs mb-sm" style="background-color: var(--color-forest-soft); border-radius: var(--radius-xs);">
-            <span class="text-xs text-dim block">Correct Answer:</span>
-            <span class="text-xs font-bold text-forest">${item.correctAnswer}</span>
-          </div>
-
-          ${item.explanation ? `
-            <div class="text-xs text-muted" style="line-height: 1.4;">
-              <strong>Explanation:</strong> ${item.explanation}
-            </div>
-          ` : ""}
-        </div>
-      `).join("")}
-    </div>
-  `;
-
-  main.querySelector("#btn-retry-quiz")?.addEventListener("click", () => {
-    router.navigate(`#/quiz?quizId=${result.quizId}`);
-  });
-
-  main.querySelector("#btn-quiz-hub")?.addEventListener("click", () => {
-    router.navigate("#/quiz");
-  });
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }

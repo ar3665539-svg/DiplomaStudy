@@ -1,215 +1,184 @@
 /**
- * DiplomaStudy - Chapters v2 (Modern)
- * + Category pills for quick jump
- * + Smooth stagger animation
+ * Chapters — All chapters of a subject (accordion with content tabs)
+ * Same as SubjectDetail but dedicated route
  */
 
 import { AppShell } from "../components/AppShell.js";
-import { getSubjectById, getChaptersBySubject } from "../services/api.js";
-import { router } from "../core/router.js";
-
-const categoryEmojis = {
-  "গদ্য": "📖", "পদ্য": "🎭", "উপন্যাস": "📕", "নাটক": "🎬",
-  "প্রবন্ধ": "📝", "গল্প": "📗", "কবিতা": "✒️", "জীবনী": "👤",
-  "অনুবাদ": "🔄", "ব্যাকরণ": "📐", "সাহিত্য": "📚",
-  "Prose": "📖", "Poetry": "🎭", "Novel": "📕", "Drama": "🎬",
-  "Essay": "📝", "Short Story": "📗", "Grammar": "📐",
-  "বীজগণিত": "🔢", "জ্যামিতি": "📐", "ত্রিকোণমিতি": "📊",
-  "ক্যালকুলাস": "∫", "পরিসংখ্যান": "📈", "সমীকরণ": "⚖️",
-  "মেকানিক্স": "⚙️", "তাপ": "🌡️", "শব্দ": "🔊", "আলো": "💡",
-  "বিদ্যুৎ": "⚡", "চুম্বক": "🧲",
-  "থিওরি": "📖", "ড্রয়িং": "✏️", "প্র্যাকটিক্যাল": "🔧",
-  "সার্ভে": "📐", "ম্যাটেরিয়াল": "🧱", "স্ট্রাকচার": "🏗️",
-  "__uncategorized__": "📄"
-};
+import { getSubjectById, getChaptersBySubject, getDepartments } from "../services/api.js";
+import { storage, STORAGE_KEYS } from "../core/storage.js";
+import { chapterListSkeleton } from "../utils/skeleton.js";
+import { errorState, emptyState } from "../utils/errorState.js";
 
 export async function renderChapters(params = {}) {
-  const urlParams = new URLSearchParams(window.location.hash.split("?")[1] || "");
-  const subjectId = params.subjectId || urlParams.get("subjectId") || "";
+  const MY_HASH = "#/chapters";
 
   AppShell.updateHeader({
     title: "Chapters",
     subtitle: "Loading...",
     showBack: true,
-    showSearch: false
+    showSearch: false,
+    showTheme: true,
+    showSettings: false,
+    expectedHash: MY_HASH
   });
 
   const main = AppShell.getMainView();
   if (!main) return;
 
-  main.innerHTML = `
-    <div class="skeleton skeleton-card" style="height:80px;margin-bottom:16px;"></div>
-    <div class="flex flex-col gap-sm">
-      <div class="skeleton skeleton-card" style="height:72px;"></div>
-      <div class="skeleton skeleton-card" style="height:72px;"></div>
-      <div class="skeleton skeleton-card" style="height:72px;"></div>
-    </div>
-  `;
+  main.innerHTML = chapterListSkeleton(6);
+
+  const urlParams = new URLSearchParams(window.location.hash.split("?")[1] || "");
+  const subjectId = params.subjectId || urlParams.get("subjectId") || "";
 
   if (!subjectId) {
-    main.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-state-icon">❓</div>
-        <h2 class="empty-state-title">No Subject</h2>
-      </div>
-    `;
+    // No subject → show subject picker
+    await renderSubjectPicker(main, MY_HASH);
     return;
   }
 
-  const [subject, chapters] = await Promise.all([
-    getSubjectById(subjectId),
-    getChaptersBySubject(subjectId)
-  ]);
+  let subject = null, chapters = [], deptName = "";
+  let loadError = null;
+
+  try {
+    subject = await getSubjectById(subjectId);
+    if (subject) chapters = await getChaptersBySubject(subjectId);
+  } catch (e) { loadError = e; }
+
+  try {
+    const settings = storage.get(STORAGE_KEYS.SETTINGS, {});
+    const deptId = settings.departmentId || settings.department || "";
+    if (deptId) {
+      const depts = await getDepartments();
+      const cur = depts.find((d) => d.id === deptId);
+      if (cur) deptName = cur.name;
+    }
+  } catch (e) {}
+
+  // Guard
+  if ((window.location.hash || "").split("?")[0] !== MY_HASH) return;
 
   if (!subject) {
-    main.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-state-icon">❓</div>
-        <h2 class="empty-state-title">Subject Not Found</h2>
-      </div>
-    `;
+    main.innerHTML = errorState({
+      type: loadError ? "server" : "notFound",
+      message: loadError?.message,
+      retryFn: () => renderChapters(params)
+    });
     return;
   }
 
   AppShell.updateHeader({
     title: subject.name,
-    subtitle: subject.code ? `Code: ${subject.code}` : "",
+    subtitle: deptName,
     showBack: true,
-    showSearch: false
+    showSearch: false,
+    showTheme: true,
+    showSettings: false,
+    expectedHash: MY_HASH
   });
 
-  // Group by category
-  const groups = {};
-  chapters.forEach((c) => {
-    const key = c.category || "__uncategorized__";
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(c);
-  });
-
-  const categoryKeys = Object.keys(groups).sort((a, b) => {
-    if (a === "__uncategorized__") return 1;
-    if (b === "__uncategorized__") return -1;
-    return a.localeCompare(b);
-  });
-
-  const hasCategories = categoryKeys.filter((k) => k !== "__uncategorized__").length > 0;
-
-  // ═══ Build category pills (for jump nav) ═══
-  const categoryPillsHtml = hasCategories ? `
-    <div class="filter-tabs-scroll animate-slide-up">
-      ${categoryKeys.map((key) => {
-        const label = key === "__uncategorized__" ? "Other" : key;
-        const emoji = categoryEmojis[key] || "📄";
-        return `
-          <button class="filter-pill" data-jump-cat="${key}" type="button">
-            ${emoji} ${label} (${groups[key].length})
-          </button>
-        `;
-      }).join("")}
-    </div>
-  ` : "";
+  const hasChapters = chapters.length > 0;
 
   main.innerHTML = `
-    <!-- Subject header -->
-    <div class="subject-hero-compact animate-fade-in">
-      <div class="shc-icon">${subject.icon || "📘"}</div>
-      <div class="shc-info">
-        <h2 class="shc-name">${subject.name}</h2>
-        ${subject.banglaName ? `<p class="shc-bangla">${subject.banglaName}</p>` : ""}
-        <div class="shc-meta">
-          ${subject.code ? `<span class="shc-chip">${subject.code}</span>` : ""}
-          <span class="shc-chip shc-chip-type">${subject.type || "Theory"}</span>
-          <span class="shc-chip shc-chip-credit">${subject.credits || 3} cr</span>
+    <div style="padding:18px;background:linear-gradient(135deg, rgba(28,62,44,0.08), transparent);border-left:4px solid #1C3E2C;border-radius:16px;margin-bottom:18px;">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#DCFCE7,#BBF7D0);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;">${subject.icon || "📘"}</div>
+        <div style="flex:1;min-width:0;">
+          <h2 style="font-size:17px;font-weight:900;color:#1C3E2C;letter-spacing:-0.3px;margin:0 0 3px;">${escapeHtml(subject.name)}</h2>
+          ${subject.code ? `<div style="font-size:11px;color:#84968B;font-weight:600;">${escapeHtml(subject.code)}</div>` : ""}
         </div>
       </div>
     </div>
 
-    <!-- Category jump pills -->
-    ${categoryPillsHtml}
-
-    <!-- Chapters meta bar -->
-    <div class="chapters-meta-bar">
-      <div class="cmb-left">
-        <span class="cmb-icon">📖</span>
-        <span class="cmb-text"><strong>${chapters.length}</strong> chapters available</span>
+    ${hasChapters ? `
+      <div style="display:flex;justify-content:space-between;padding:12px 14px;background:linear-gradient(135deg, rgba(28,62,44,0.06), transparent);border-radius:12px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:16px;">📖</span>
+          <span style="font-size:13px;font-weight:700;color:#57675D;">মোট <strong style="color:#1C3E2C;font-weight:900;">${chapters.length}</strong>টি অধ্যায়</span>
+        </div>
       </div>
-      <span class="cmb-hint">ট্যাপ করুন</span>
-    </div>
 
-    <!-- Chapter list -->
-    ${chapters.length > 0 ? categoryKeys.map((catKey, catIdx) => {
-      const catChapters = groups[catKey];
-      const catLabel = catKey === "__uncategorized__" ? "Other Chapters" : catKey;
-      const catEmoji = categoryEmojis[catKey] || "📄";
-      const showCategoryHeader = hasCategories;
-
-      return `
-        <div ${catKey !== "__uncategorized__" ? `id="cat-${catKey}"` : ""}>
-          ${showCategoryHeader ? `
-            <div class="compact-section-header" style="margin-top:${catIdx > 0 ? "24px" : "16px"};">
-              <span class="csh-icon">${catEmoji}</span>
-              <h3 class="csh-title">${catLabel}</h3>
-              <span class="csh-count">${catChapters.length}</span>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${chapters.map((ch) => `
+          <button class="ch-row" data-chapter-id="${ch.id}" style="
+            display:flex;align-items:center;gap:12px;
+            padding:14px;background:#FFFFFF;
+            border:1.5px solid #E1E8E1;border-radius:14px;
+            cursor:pointer;font-family:inherit;text-align:left;width:100%;
+            box-shadow:0 2px 6px rgba(28,62,44,0.04);
+          ">
+            <div style="min-width:38px;height:38px;padding:0 8px;border-radius:10px;background:linear-gradient(135deg,#DCFCE7,#BBF7D0);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#065F46;font-family:ui-monospace,monospace;flex-shrink:0;">${ch.number}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13.5px;font-weight:800;color:#1C3E2C;line-height:1.3;margin-bottom:3px;">${escapeHtml(ch.name)}</div>
+              ${ch.nameEn ? `<div style="font-size:10.5px;color:#84968B;font-weight:500;font-style:italic;">${escapeHtml(ch.nameEn)}</div>` : ""}
             </div>
-          ` : ""}
-
-          <div class="chapters-accordion">
-            ${catChapters.map((ch, idx) => `
-              <div 
-                class="chapter-item tap-effect animate-slide-up" 
-                data-chapter-id="${ch.id}"
-                style="animation-delay:${0.05 + idx * 0.03}s;"
-              >
-                <button class="chapter-header" type="button">
-                  <div class="ch-number-pill">${ch.number}</div>
-                  <div class="ch-header-text">
-                    <span class="ch-title-bn">${ch.name}</span>
-                    ${ch.nameEn ? `<span class="ch-title-en">${ch.nameEn}</span>` : ""}
-                  </div>
-                  <div class="ch-chevron">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                      <polyline points="6 9 12 15 18 9"></polyline>
-                    </svg>
-                  </div>
-                </button>
-              </div>
-            `).join("")}
-          </div>
-        </div>
-      `;
-    }).join("") : `
-      <div class="empty-state">
-        <div class="empty-state-icon">📖</div>
-        <h2 class="empty-state-title">No Chapters Found</h2>
-        <p class="empty-state-desc">এই subject-এ এখনো কোনো chapter যোগ করা হয়নি।</p>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#84968B" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        `).join("")}
       </div>
-    `}
+    ` : emptyState({ icon: "📚", title: "কোনো অধ্যায় নেই", message: "এই subject-এ এখনো chapter যোগ করা হয়নি।" })}
+
+    <div style="height:20px;"></div>
   `;
 
-  // ═══ Category jump ═══
-  main.querySelectorAll("[data-jump-cat]").forEach((btn) => {
+  main.querySelectorAll(".ch-row").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const key = btn.getAttribute("data-jump-cat");
-      const target = document.getElementById(`cat-${key}`);
-      if (target) {
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
-        // Highlight active pill
-        main.querySelectorAll(".filter-pill").forEach((p) => p.classList.remove("active"));
-        btn.classList.add("active");
-      }
+      const chId = btn.getAttribute("data-chapter-id");
+      if (chId) window.location.hash = `#/content?subjectId=${subjectId}&chapterId=${chId}`;
     });
   });
+}
 
-  // ═══ Chapter navigation ═══
-  main.querySelectorAll(".chapter-item").forEach((item) => {
-    const navigate = () => {
-      const chapterId = item.getAttribute("data-chapter-id");
-      if (router.routes?.["#/content"]) {
-        router.navigate(`#/content?subjectId=${subjectId}&chapterId=${chapterId}`);
-      } else if (router.routes?.["#/questions"]) {
-        router.navigate(`#/questions?subjectId=${subjectId}&chapterId=${chapterId}`);
-      }
-    };
-    item.querySelector(".chapter-header")?.addEventListener("click", navigate);
+async function renderSubjectPicker(main, MY_HASH) {
+  const { getSubjects } = await import("../services/api.js");
+  let subjects = [];
+  try { subjects = await getSubjects(); } catch (e) {}
+
+  if ((window.location.hash || "").split("?")[0] !== MY_HASH) return;
+
+  if (subjects.length === 0) {
+    main.innerHTML = emptyState({
+      icon: "📚",
+      title: "কোনো Subject নেই",
+      message: "Subjects যোগ করুন।",
+      actionFn: () => window.location.hash = "#/home",
+      actionLabel: "🏠 Home"
+    });
+    return;
+  }
+
+  main.innerHTML = `
+    <div style="padding:14px 16px;background:linear-gradient(135deg, rgba(28,62,44,0.06), transparent);border-left:4px solid #1C3E2C;border-radius:14px;margin-bottom:18px;">
+      <p style="font-size:12.5px;color:#57675D;line-height:1.55;font-weight:500;margin:0;">যে subject এর chapters দেখতে চান সেটা select করুন।</p>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      ${subjects.map((s) => `
+        <button class="subj-pick" data-id="${s.id}" style="
+          display:flex;align-items:center;gap:12px;
+          padding:14px;background:#FFFFFF;
+          border:1.5px solid #E1E8E1;border-radius:16px;
+          cursor:pointer;font-family:inherit;text-align:left;width:100%;
+        ">
+          <div style="width:46px;height:46px;border-radius:13px;background:linear-gradient(135deg,#DCFCE7,#BBF7D0);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">${s.icon || "📘"}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13.5px;font-weight:800;color:#1C3E2C;margin-bottom:2px;">${escapeHtml(s.name)}</div>
+            ${s.code ? `<div style="font-size:11px;color:#84968B;font-weight:600;">${escapeHtml(s.code)}</div>` : ""}
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#84968B" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+      `).join("")}
+    </div>
+  `;
+
+  main.querySelectorAll(".subj-pick").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-id");
+      if (id) window.location.hash = `#/chapters?subjectId=${id}`;
+    });
   });
+}
+
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }

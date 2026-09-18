@@ -1,37 +1,35 @@
 /**
- * DiplomaStudy - Coming Soon Modal
- * সব locked feature এ একই modal দেখায়
+ * ComingSoonModal — Modal for "coming soon" features
  */
 
-export const ComingSoonModal = {
-  show(featureName = "এই feature") {
-    // Remove existing
-    document.getElementById("coming-soon-modal")?.remove();
+import { Modal } from "./Modal.js";
 
-    const overlay = document.createElement("div");
-    overlay.id = "coming-soon-modal";
-    overlay.className = "modal-overlay";
-    overlay.style.cssText = "display: flex; align-items: center; justify-content: center; padding: 20px;";
-
-    overlay.innerHTML = `
-      <div class="coming-soon-modal-content animate-fade-in" role="dialog" aria-modal="true">
-        <div class="coming-soon-icon">🔒</div>
-        <h3 class="coming-soon-title">Coming Soon!</h3>
-        <p class="coming-soon-desc">
-          <strong>${featureName}</strong> feature টি শীঘ্রই যোগ করা হবে।
-          Civil 1st Semester এর content server থেকে যুক্ত হওয়ার পর এটি সক্রিয় হবে।
-        </p>
-        <p class="coming-soon-hint">💡 আমাদের সাথে থাকুন</p>
-        <button class="btn btn-primary btn-block" id="coming-soon-close">বুঝেছি</button>
+export function showComingSoon(featureName = "এই feature") {
+  const bodyHtml = `
+    <div style="text-align:center;padding:12px 0;">
+      <div style="font-size:64px;margin-bottom:14px;">🚧</div>
+      <h3 style="font-size:17px;font-weight:900;color:#1C3E2C;margin:0 0 8px;letter-spacing:-0.3px;">
+        ${escapeHtml(featureName)} Coming Soon
+      </h3>
+      <p style="font-size:13px;color:#84968B;line-height:1.6;margin:0 0 8px;font-weight:500;">
+        এই feature টা শীঘ্রই যুক্ত করা হবে। Admin Panel থেকে content যোগ হলে সাথে সাথে এখানে দেখা যাবে।
+      </p>
+      <div style="display:inline-block;padding:6px 12px;background:#FEF3C7;border:1px solid #FCD34D;border-radius:999px;font-size:11px;font-weight:800;color:#92400E;margin-top:8px;">
+        ⏳ অপেক্ষা করুন
       </div>
-    `;
+    </div>
+  `;
 
-    document.body.appendChild(overlay);
+  Modal.show({
+    title: "",
+    bodyHtml,
+    confirmText: "ঠিক আছে",
+    showCancel: false,
+    onConfirm: () => {}
+  });
+}
 
-    const close = () => overlay.remove();
-    overlay.querySelector("#coming-soon-close")?.addEventListener("click", close);
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) close();
-    });
-  }
-};
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}

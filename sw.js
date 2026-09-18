@@ -1,163 +1,163 @@
-/* DiplomaStudy - Service Worker v2 */
-const CACHE_NAME = 'diplomastudy-v2';
-const RUNTIME_CACHE = 'diplomastudy-runtime-v2';
+/**
+ * DiplomaStudy - Service Worker (Offline Support)
+ */
 
-// ═══════════════════════════════════════════
-// Precache Assets
-// ═══════════════════════════════════════════
-const PRECACHE_ASSETS = [
-  './',
-  './index.html',
-  './manifest.json',
-  './css/variables.css',
-  './css/reset.css',
-  './css/global.css',
-  './css/layout.css',
-  './css/components.css',
-  './css/civil.css',
-  './css/onboarding.css',
-  './css/responsive.css',
-  './js/main.js',
-  './js/core/supabase.js',
-  './js/services/api.js'
+const CACHE_VERSION = "diplomastudy-v1";
+const STATIC_CACHE = `${CACHE_VERSION}-static`;
+const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
+
+// Static assets to pre-cache
+const PRECACHE_URLS = [
+  "./",
+  "./index.html",
+  "./manifest.json",
+  "./css/variables.css",
+  "./css/reset.css",
+  "./css/global.css",
+  "./css/layout.css",
+  "./css/components.css",
+  "./css/civil.css",
+  "./css/onboarding.css",
+  "./css/selection-modal.css",
+  "./css/content.css",
+  "./css/responsive.css",
+  "./js/main.js",
+  "./js/core/supabase.js",
+  "./js/core/router.js",
+  "./js/core/storage.js",
+  "./js/services/api.js",
+  "./js/components/AppShell.js",
+  "./js/components/Header.js",
+  "./js/components/BottomNav.js",
+  "./js/components/Toast.js"
 ];
 
 // ═══════════════════════════════════════════
-// Install
+// INSTALL
 // ═══════════════════════════════════════════
-self.addEventListener('install', (event) => {
-  console.log('[SW] Installing v2...');
+self.addEventListener("install", (event) => {
+  console.log("[SW] Installing...");
   event.waitUntil(
-    caches.open(CACHE_NAME)
+    caches.open(STATIC_CACHE)
       .then((cache) => {
-        return cache.addAll(PRECACHE_ASSETS).catch((err) => {
-          console.warn('[SW] Precache incomplete:', err);
+        return cache.addAll(PRECACHE_URLS).catch((err) => {
+          console.warn("[SW] Precache partial fail:", err);
         });
       })
-      .then(() => {
-        console.log('[SW] Skip waiting');
-        return self.skipWaiting();
-      })
+      .then(() => self.skipWaiting())
   );
 });
 
 // ═══════════════════════════════════════════
-// Activate — Delete old caches
+// ACTIVATE
 // ═══════════════════════════════════════════
-self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating v2...');
+self.addEventListener("activate", (event) => {
+  console.log("[SW] Activating...");
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME && key !== RUNTIME_CACHE) {
-            console.log('[SW] Deleting old cache:', key);
-            return caches.delete(key);
-          }
-        })
-      );
-    }).then(() => {
-      console.log('[SW] Claiming clients');
-      return self.clients.claim();
-    })
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys
+          .filter((k) => k !== STATIC_CACHE && k !== RUNTIME_CACHE)
+          .map((k) => caches.delete(k))
+      )
+    ).then(() => self.clients.claim())
   );
 });
 
 // ═══════════════════════════════════════════
-// Fetch — Network First for JS/HTML, Cache First for CSS
+// FETCH — Strategy per request type
 // ═══════════════════════════════════════════
-self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
-  if (!event.request.url.startsWith('http')) return;
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
 
-  const url = new URL(event.request.url);
-  const isSameOrigin = url.origin === self.location.origin;
+  // Skip non-GET
+  if (request.method !== "GET") return;
 
-  // Skip Supabase API calls (don't cache API responses)
-  if (url.hostname.includes('supabase')) {
+  // Skip Supabase API (handled by app-level cache)
+  if (url.hostname.includes("supabase.co")) return;
+
+  // Skip chrome-extension etc
+  if (!url.protocol.startsWith("http")) return;
+
+  // HTML pages: Network-first, fallback to cache
+  if (request.mode === "navigate" || request.destination === "document") {
+    event.respondWith(networkFirst(request));
     return;
   }
 
-  const acceptHeader = event.request.headers.get('accept') || '';
-  const isHTML = acceptHeader.includes('text/html');
-  const isJS = url.pathname.endsWith('.js') || url.pathname.endsWith('.mjs');
-  const isCSS = url.pathname.endsWith('.css');
-  const isJSON = url.pathname.endsWith('.json');
-
-  // ═══════════════════════════════════════════
-  // Network First for HTML, JS, JSON
-  // (always get latest)
-  // ═══════════════════════════════════════════
-  if (isHTML || isJS || isJSON) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          if (response && response.status === 200 && isSameOrigin) {
-            const clone = response.clone();
-            caches.open(RUNTIME_CACHE).then((cache) => {
-              cache.put(event.request, clone);
-            });
-          }
-          return response;
-        })
-        .catch(() => {
-          // Offline — try cache
-          return caches.match(event.request).then((cached) => {
-            if (cached) return cached;
-            if (isHTML) return caches.match('./index.html');
-            return new Response('Offline', { status: 503 });
-          });
-        })
-    );
+  // Static assets (CSS/JS/images): Cache-first
+  if (
+    request.destination === "style" ||
+    request.destination === "script" ||
+    request.destination === "image" ||
+    request.destination === "font"
+  ) {
+    event.respondWith(cacheFirst(request));
     return;
   }
 
-  // ═══════════════════════════════════════════
-  // Cache First for CSS, fonts, images
-  // ═══════════════════════════════════════════
-  if (isCSS || url.pathname.match(/\.(woff2?|ttf|png|jpg|jpeg|svg|gif|webp|ico)$/)) {
-    event.respondWith(
-      caches.match(event.request).then((cached) => {
-        if (cached) return cached;
-        return fetch(event.request).then((response) => {
-          if (response && response.status === 200 && isSameOrigin) {
-            const clone = response.clone();
-            caches.open(RUNTIME_CACHE).then((cache) => {
-              cache.put(event.request, clone);
-            });
-          }
-          return response;
-        });
-      })
-    );
-    return;
-  }
-
-  // ═══════════════════════════════════════════
-  // Default — Stale While Revalidate
-  // ═══════════════════════════════════════════
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const fetchPromise = fetch(event.request).then((response) => {
-        if (response && response.status === 200 && isSameOrigin) {
-          const clone = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => {
-            cache.put(event.request, clone);
-          });
-        }
-        return response;
-      }).catch(() => cached);
-
-      return cached || fetchPromise;
-    })
-  );
+  // Everything else: Network-first
+  event.respondWith(networkFirst(request));
 });
 
 // ═══════════════════════════════════════════
-// Message handler — Force update
+// STRATEGIES
 // ═══════════════════════════════════════════
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
+async function cacheFirst(request) {
+  const cache = await caches.open(STATIC_CACHE);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+
+  try {
+    const response = await fetch(request);
+    if (response && response.status === 200) {
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (err) {
+    return new Response("", { status: 408, statusText: "Offline" });
+  }
+}
+
+async function networkFirst(request) {
+  const cache = await caches.open(RUNTIME_CACHE);
+
+  try {
+    const response = await fetch(request);
+    if (response && response.status === 200 && request.method === "GET") {
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (err) {
+    const cached = await cache.match(request);
+    if (cached) return cached;
+
+    // Fallback to index.html for navigation
+    if (request.mode === "navigate") {
+      const fallback = await caches.match("./index.html");
+      if (fallback) return fallback;
+    }
+
+    return new Response(
+      JSON.stringify({ error: "Offline" }),
+      { status: 503, headers: { "Content-Type": "application/json" } }
+    );
+  }
+}
+
+// ═══════════════════════════════════════════
+// MESSAGE (from app)
+// ═══════════════════════════════════════════
+self.addEventListener("message", (event) => {
+  if (event.data === "SKIP_WAITING") {
     self.skipWaiting();
   }
+  if (event.data === "CLEAR_CACHE") {
+    caches.keys().then((keys) =>
+      Promise.all(keys.map((k) => caches.delete(k)))
+    );
+  }
 });
+
+console.log("[SW] Loaded");

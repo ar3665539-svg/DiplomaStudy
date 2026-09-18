@@ -1,43 +1,57 @@
 /**
- * DiplomaStudy - PDF Service
- * Handles PDF viewing, downloading, and bookmarking integration
+ * DiplomaStudy - PDF Service (helpers)
  */
 
-import { pdfs, getPdfsByCategory } from "../../data/pdfs.js";
-import { Toast } from "../components/Toast.js";
-
 export const pdfService = {
-  getAll() {
-    return pdfs;
+  /**
+   * Open PDF in new tab
+   */
+  open(url) {
+    if (!url) return false;
+    try { window.open(url, "_blank", "noopener"); return true; }
+    catch (e) { return false; }
   },
 
-  getByCategory(category) {
-    return getPdfsByCategory(category);
+  /**
+   * Navigate to in-app PDF viewer
+   */
+  openInApp(url, title = "PDF") {
+    if (!url) return false;
+    try {
+      const encoded = encodeURIComponent(url);
+      const encodedTitle = encodeURIComponent(title);
+      window.location.hash = `#/pdf-viewer?url=${encoded}&title=${encodedTitle}`;
+      return true;
+    } catch (e) { return false; }
   },
 
-  getById(id) {
-    return pdfs.find((p) => p.id === id) || null;
+  /**
+   * Download PDF
+   */
+  download(url, filename = null) {
+    if (!url) return false;
+    try {
+      const a = document.createElement("a");
+      a.href = url;
+      if (filename) a.download = filename;
+      a.target = "_blank";
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => a.remove(), 100);
+      return true;
+    } catch (e) { return false; }
   },
 
-  openPdf(url) {
-    if (!url) {
-      Toast.show("PDF document not available", "error");
-      return;
-    }
-    window.open(url, "_blank", "noopener,noreferrer");
-  },
-
-  downloadPdf(url, filename = "document.pdf") {
-    if (!url) {
-      Toast.show("Download link unavailable", "error");
-      return;
-    }
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    Toast.show("Downloading PDF...", "info");
+  /**
+   * Format file size
+   */
+  formatSize(bytes) {
+    if (!bytes || bytes < 0) return "0 B";
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(2) + " MB";
   }
 };
+
+export default pdfService;

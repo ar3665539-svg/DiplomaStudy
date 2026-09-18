@@ -1,103 +1,127 @@
 /**
- * DiplomaStudy - Client-Side Hash Router
- * Supports direct routes, route parameters, and history navigation
+ * DiplomaStudy - Simple Hash Router
  */
 
-import { state } from "./state.js";
-import { events } from "./events.js";
+let routes = {};
+let currentRoute = "";
+let cleanupFn = null;
+let _initialized = false;
 
-class Router {
-  constructor() {
-    this.routes = new Map();
-    this.historyStack = [];
-    this.currentPath = "#/home";
-    this.params = {};
-    
-    window.addEventListener("hashchange", () => this._handleRoute());
+export function initRouter(routesMap) {
+  routes = routesMap;
+
+  window.addEventListener("hashchange", handleRoute);
+
+  if (!window.location.hash) {
+    window.location.hash = "#/home";
+  } else {
+    handleRoute();
   }
 
-  register(path, handler) {
-    this.routes.set(path, handler);
+  _initialized = true;
+}
+
+function handleRoute() {
+  const hash = window.location.hash || "#/home";
+  currentRoute = hash;
+
+  // Cleanup previous page
+  if (cleanupFn) {
+    try { cleanupFn(); } catch (e) {}
+    cleanupFn = null;
   }
 
-  navigate(path, pushHistory = true) {
-    if (pushHistory && this.currentPath !== path) {
-      this.historyStack.push(this.currentPath);
+  // Parse route + query
+  const [pathPart, queryPart] = hash.split("?");
+  const params = {};
+
+  if (queryPart) {
+    const searchParams = new URLSearchParams(queryPart);
+    for (const [key, value] of searchParams.entries()) {
+      params[key] = value;
     }
-    window.location.hash = path;
   }
 
-  back() {
-    if (this.historyStack.length > 0) {
-      const prev = this.historyStack.pop();
-      window.location.hash = prev;
-    } else {
-      window.location.hash = "#/home";
-    }
+  // Find handler
+  const handler = routes[pathPart];
+  if (!handler) {
+    console.warn(`[Router] No route for ${pathPart}, redirecting to home`);
+    window.location.hash = "#/home";
+    return;
   }
 
-  getRouteInfo() {
-    const hash = window.location.hash || "#/home";
-    const [pathPart, queryPart] = hash.split("?");
-    const params = {};
-    
-    if (queryPart) {
-      const searchParams = new URLSearchParams(queryPart);
-      for (const [key, value] of searchParams.entries()) {
-        params[key] = value;
+  // Update title
+  import("../components/AppShell.js").then(({ AppShell }) => {
+    try {
+      AppShell.updateHeader({
+        title: handler.title || "",
+        subtitle: handler.subtitle || ""
+      });
+    } catch (e) {}
+  }).catch(() => {});
+
+  // Render
+  const content = document.getElementById("main-view");
+  if (content && handler.render) {
+    content.innerHTML = "";
+    try {
+      const result = handler.render(content, params);
+      if (result && typeof result.then === "function") {
+        result.catch((err) => {
+          console.error(`[Router] Render error for ${pathPart}:`, err);
+          content.innerHTML = `
+            <div style="padding:40px 20px;text-align:center;">
+              <div style="font-size:48px;margin-bottom:12px;">⚠️</div>
+              <div style="font-size:15px;font-weight:800;color:#DC2626;">Page load failed</div>
+              <div style="font-size:12px;color:#84968B;margin-top:8px;">${escapeHtml(err.message)}</div>
+            </div>
+          `;
+        });
       }
+    } catch (err) {
+      console.error(`[Router] Sync error for ${pathPart}:`, err);
     }
-    
-    return { path: pathPart, params };
-  }
-
-  init() {
-    if (!window.location.hash) {
-      window.location.hash = "#/home";
-    } else {
-      this._handleRoute();
-    }
-  }
-
-  _handleRoute() {
-    const { path, params } = this.getRouteInfo();
-    this.currentPath = path;
-    this.params = params;
-    state.setRoute(path);
-
-    const handler = this.routes.get(path);
-    if (handler) {
-      try {
-        handler(params);
-      } catch (err) {
-        console.error(`[Router] Error rendering ${path}:`, err);
-        this._renderError(path, err.message);
-      }
-    } else {
-      // Fallback route
-      const homeHandler = this.routes.get("#/home");
-      if (homeHandler) {
-        homeHandler(params);
-      }
-    }
-
     window.scrollTo(0, 0);
-    events.emit("router:navigated", { path, params });
-  }
-
-  _renderError(path, message) {
-    const main = document.querySelector(".app-main");
-    if (main) {
-      main.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">⚠️</div>
-          <h2 class="empty-state-title">Something went wrong</h2>
-          <p class="empty-state-desc">Could not render ${path}. Please try again.</p>
-          <button class="btn btn-primary btn-sm" onclick="window.location.hash = '#/home'">Back to Home</button>
-        </div>
-      `;
-    }
   }
 }
 
-export const router = new Router();
+export function navigate(route) {
+  if (!route.startsWith("#")) route = "#" + route;
+  window.location.hash = route;
+}
+
+export function getCurrentRoute() {
+  return currentRoute;
+}
+
+export function register(path, renderFn) {
+  routes[path] = { render: renderFn, title: "", subtitle: "" };
+}
+
+export const router = {
+  register: (path, renderFn) => {
+    if (typeof renderFn === "function") {
+      routes[path] = { render: renderFn };
+    } else if (typeof renderFn === "object" && typeof renderFn.render === "function") {
+      routes[path] = renderFn;
+    }
+  },
+  navigate,
+  getCurrentRoute,
+  init: () => {
+    if (!_initialized) {
+      initRouter(routes);
+    } else {
+      handleRoute();
+    }
+  },
+  routes,
+  get handlers() { return routes; }
+};
+
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+export default router;

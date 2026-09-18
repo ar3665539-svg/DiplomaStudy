@@ -1,5 +1,6 @@
 /**
- * AppShell v3 - Inline padding for bottom nav
+ * AppShell - Root shell with hash guard
+ * Prevents async header race conditions
  */
 
 import { Header } from "./Header.js";
@@ -8,6 +9,7 @@ import { BottomNav } from "./BottomNav.js";
 export const AppShell = {
   _mainView: null,
   _initialized: false,
+  _currentHash: "",
 
   init() {
     if (this._initialized) return;
@@ -42,7 +44,14 @@ export const AppShell = {
 
     BottomNav.init();
 
-    console.log("[AppShell v3] ✅ Mounted");
+    // Track hash changes
+    window.addEventListener("hashchange", () => {
+      this._currentHash = (window.location.hash || "#/home").split("?")[0];
+    });
+
+    this._currentHash = (window.location.hash || "#/home").split("?")[0];
+
+    console.log("[AppShell] ✅ Mounted");
   },
 
   renderHeader(options = {}) {
@@ -52,15 +61,34 @@ export const AppShell = {
     Header.bindEvents();
   },
 
+  /**
+   * Update header with optional hash guard
+   * If expectedHash is provided, only updates when current hash matches
+   */
   updateHeader(options = {}) {
+    // ═══ HASH GUARD ═══
+    if (options.expectedHash) {
+      const currentHash = (window.location.hash || "#/home").split("?")[0];
+      const expected = String(options.expectedHash).split("?")[0];
+
+      if (currentHash !== expected) {
+        console.log(`[AppShell] ⏭ Header skipped (on ${currentHash}, expected ${expected})`);
+        return;
+      }
+    }
+
+    // Extract guard, pass rest to renderHeader
+    const { expectedHash, ...headerOptions } = options;
+
     this.renderHeader({
       title: "",
       subtitle: "",
       showBack: false,
       showSearch: false,
       showSettings: true,
+      showTheme: true,
       centerTitle: true,
-      ...options
+      ...headerOptions
     });
   },
 

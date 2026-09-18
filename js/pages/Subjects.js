@@ -1,111 +1,177 @@
 /**
- * DiplomaStudy - Subjects List v2 (Modern)
- * + Stagger animations
- * + Modern cards
- * + Count-up subtitle
+ * Subjects — with hash guard
  */
 
 import { AppShell } from "../components/AppShell.js";
-import { getSubjects, getDepartments } from "../services/api.js";
 import { storage, STORAGE_KEYS } from "../core/storage.js";
-import { router } from "../core/router.js";
+import { getSubjects, getDepartments, getSemestersByDepartment } from "../services/api.js";
+import { listSkeleton } from "../utils/skeleton.js";
+import { errorState, emptyState } from "../utils/errorState.js";
+import { attachPullToRefresh } from "../utils/pullToRefresh.js";
+import { Toast } from "../components/Toast.js";
+
+let currentCleanup = null;
 
 export async function renderSubjects() {
+  if (currentCleanup) { try { currentCleanup(); } catch(e){} currentCleanup = null; }
+
+  const MY_HASH = "#/subjects";
+
   AppShell.updateHeader({
     title: "Subjects",
     subtitle: "Loading...",
-    showBack: true
+    showBack: true,
+    showSearch: false,
+    showTheme: true,
+    showSettings: false,
+    expectedHash: MY_HASH
   });
 
   const main = AppShell.getMainView();
   if (!main) return;
 
-  // Skeleton
-  main.innerHTML = `
-    <div class="skeleton skeleton-text w-100" style="height:44px;margin-bottom:16px;"></div>
-    <div class="flex flex-col gap-sm">
-      <div class="skeleton skeleton-card" style="height:96px;"></div>
-      <div class="skeleton skeleton-card" style="height:96px;"></div>
-      <div class="skeleton skeleton-card" style="height:96px;"></div>
-    </div>
-  `;
+  main.innerHTML = listSkeleton(6, "96px");
+
+  let subjects = [], departments = [], semester = null;
+  let loadError = null;
+
+  try {
+    const settings = storage.get(STORAGE_KEYS.SETTINGS, {});
+    const deptId = settings.departmentId || settings.department || "";
+
+    [subjects, departments] = await Promise.all([
+      getSubjects().catch((e) => { loadError = e; return []; }),
+      getDepartments().catch(() => [])
+    ]);
+
+    if (deptId) {
+      const sems = await getSemestersByDepartment(deptId).catch(() => []);
+      const semId = settings.semesterId || settings.semester;
+      semester = sems.find((s) => s.id === semId);
+    }
+  } catch (err) {
+    loadError = err;
+  }
+
+  // Guard
+  if ((window.location.hash || "").split("?")[0] !== MY_HASH) {
+    console.log("[Subjects] Route changed — abort");
+    return;
+  }
+
+  if (subjects.length === 0 && loadError) {
+    main.innerHTML = errorState({
+      type: "server",
+      message: loadError.message,
+      retryFn: () => renderSubjects()
+    });
+    return;
+  }
 
   const settings = storage.get(STORAGE_KEYS.SETTINGS, {});
-  const departments = await getDepartments();
-  const curDeptId = settings.departmentId || settings.department || "";
-  const currentDept = departments.find((d) => d.id === curDeptId) || departments[0];
-
-  const subjects = await getSubjects();
+  const currentDept = departments.find((d) => d.id === (settings.departmentId || settings.department));
 
   AppShell.updateHeader({
     title: "Subjects",
-    subtitle: currentDept ? `${currentDept.name} • Semester ${settings.semesterNumber || 1}` : "",
-    showBack: true
+    subtitle: currentDept ? `${currentDept.name}${semester ? " • " + semester.name : ""}` : "",
+    showBack: true,
+    showSearch: false,
+    showTheme: true,
+    showSettings: false,
+    expectedHash: MY_HASH
   });
 
   if (subjects.length === 0) {
-    main.innerHTML = `
-      <div class="empty-state animate-fade-in" style="margin-top: 40px;">
-        <div class="empty-state-icon">📚</div>
-        <h2 class="empty-state-title">No Subjects</h2>
-        <p class="empty-state-desc">এই semester-এ এখনো কোনো subject যোগ করা হয়নি।</p>
-      </div>
-    `;
+    main.innerHTML = emptyState({
+      icon: "📚",
+      title: "কোনো Subject নেই",
+      message: "এই semester-এ এখনো কোনো subject যোগ করা হয়নি।",
+      actionFn: () => window.location.hash = "#/home",
+      actionLabel: "🏠 Home এ যান"
+    });
     return;
   }
 
   main.innerHTML = `
-    <div class="page-intro animate-slide-up">
-      <p class="page-intro-text">
-        নিচের যেকোনো বিষয়ে ট্যাপ করুন। প্রতিটি বিষয়ের chapter, প্রশ্ন ও সাজেশন server থেকে যুক্ত করা হবে।
-      </p>
+    <div style="
+      padding:12px 14px;
+      background:linear-gradient(135deg, rgba(28,62,44,0.06), transparent);
+      border-left:3px solid #1C3E2C;
+      border-radius:12px;
+      margin-bottom:16px;
+      font-size:12.5px;
+      color:#57675D;
+      line-height:1.5;
+      font-weight:500;
+    ">
+      নিচের যেকোনো বিষয়ে ট্যাপ করুন। প্রতিটি বিষয়ের chapter ও content server থেকে load হবে।
     </div>
 
-    <div class="subject-list-full">
+    <div style="display:flex;flex-direction:column;gap:10px;">
       ${subjects.map((sub, idx) => `
-        <div 
-          class="subject-card-full tap-effect animate-slide-up" 
-          data-subject-id="${sub.id}"
-          role="button"
-          tabindex="0"
-          style="animation-delay:${idx * 0.04}s;"
-          aria-label="${sub.name}"
-        >
-          <div class="subj-left">
-            <div class="subj-number">${String(idx + 1).padStart(2, "0")}</div>
-            <div class="subj-icon">${sub.icon || "📘"}</div>
+        <button class="subject-row" data-subject-id="${sub.id}" style="
+          display:flex;align-items:center;gap:12px;
+          padding:14px;background:#FFFFFF;
+          border:1.5px solid #E1E8E1;border-radius:16px;
+          cursor:pointer;font-family:inherit;text-align:left;width:100%;
+          box-shadow:0 2px 8px rgba(28,62,44,0.04);
+          transition:all 0.15s ease;
+          -webkit-tap-highlight-color:transparent;
+        ">
+          <div style="font-size:10px;font-weight:800;color:#84968B;font-family:ui-monospace,monospace;width:24px;text-align:center;flex-shrink:0;">
+            ${String(idx + 1).padStart(2, "0")}
           </div>
-          <div class="subj-body">
-            <h3 class="subj-name">${sub.name}</h3>
-            <p class="subj-bangla">${sub.banglaName || ""}</p>
-            <div class="subj-meta">
-              ${sub.code ? `<span class="badge badge-forest">${sub.code}</span>` : ""}
-              <span class="badge badge-sage">${sub.type || "Theory"}</span>
-              <span class="badge badge-accent">${sub.credits || 3} Credits</span>
+          <div style="width:46px;height:46px;border-radius:13px;background:linear-gradient(135deg,#DCFCE7,#BBF7D0);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">
+            ${sub.icon || "📘"}
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13.5px;font-weight:800;color:#1C3E2C;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+              ${escapeHtml(sub.name)}
             </div>
-            ${sub.description ? `<p class="subj-desc">${sub.description}</p>` : ""}
+            ${sub.banglaName ? `<div style="font-size:11px;color:#84968B;font-weight:600;margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(sub.banglaName)}</div>` : ""}
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+              ${sub.code ? `<span style="font-size:9px;font-weight:800;color:#065F46;background:#DCFCE7;padding:2px 7px;border-radius:5px;text-transform:uppercase;">${escapeHtml(sub.code)}</span>` : ""}
+              ${sub.type ? `<span style="font-size:9px;font-weight:800;color:#57675D;background:#F2F5F2;padding:2px 7px;border-radius:5px;text-transform:uppercase;">${escapeHtml(sub.type)}</span>` : ""}
+              ${sub.credits ? `<span style="font-size:9px;font-weight:800;color:#C87A1E;background:#FEF3C7;padding:2px 7px;border-radius:5px;">${sub.credits} CR</span>` : ""}
+            </div>
           </div>
-          <div class="subj-arrow">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polyline points="9 18 15 12 9 6"></polyline>
-            </svg>
-          </div>
-        </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#84968B" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0;">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
       `).join("")}
     </div>
+
+    <div style="height:20px;"></div>
   `;
 
-  main.querySelectorAll(".subject-card-full").forEach((card) => {
-    const navigate = () => {
-      const id = card.getAttribute("data-subject-id");
-      if (id) router.navigate(`#/subject?subjectId=${id}`);
-    };
-    card.addEventListener("click", navigate);
-    card.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        navigate();
-      }
+  main.querySelectorAll(".subject-row").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const id = btn.getAttribute("data-subject-id");
+      if (id) window.location.hash = `#/subject?subjectId=${id}`;
+    });
+    btn.addEventListener("mouseenter", () => {
+      btn.style.transform = "translateY(-2px)";
+      btn.style.boxShadow = "0 8px 20px rgba(28,62,44,0.1)";
+      btn.style.borderColor = "#7A9B7A";
+    });
+    btn.addEventListener("mouseleave", () => {
+      btn.style.transform = "";
+      btn.style.boxShadow = "0 2px 8px rgba(28,62,44,0.04)";
+      btn.style.borderColor = "#E1E8E1";
     });
   });
+
+  const cleanupPull = attachPullToRefresh(main, async () => {
+    Toast.info("🔄 Refreshing...");
+    await renderSubjects();
+  });
+
+  currentCleanup = () => { try { cleanupPull(); } catch(e){} };
+}
+
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }

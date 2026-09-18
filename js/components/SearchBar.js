@@ -1,51 +1,78 @@
 /**
- * DiplomaStudy - SearchBar Component
+ * SearchBar — Reusable debounced search input
  */
 
 export const SearchBar = {
-  render({ placeholder = "Search subjects, questions, formulas, notes...", value = "", id = "global-search-input" } = {}) {
+  render({ placeholder = "খুঁজুন...", id = "search-input", value = "" } = {}) {
     return `
-      <div class="search-container">
-        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-        </svg>
+      <div style="position:relative;width:100%;">
         <input 
           type="text" 
           id="${id}" 
-          class="search-input" 
-          placeholder="${placeholder}" 
-          value="${value}"
+          value="${escapeAttr(value)}" 
+          placeholder="${escapeAttr(placeholder)}" 
           autocomplete="off"
-          autocapitalize="off"
-          spellcheck="false"
+          style="
+            width:100%;
+            padding:12px 40px 12px 44px;
+            border-radius:14px;
+            border:1.5px solid #E1E8E1;
+            background:#FFFFFF;
+            color:#1C3E2C;
+            font-family:inherit;
+            font-size:13.5px;
+            font-weight:600;
+            box-sizing:border-box;
+            outline:none;
+            transition:border-color 0.2s, box-shadow 0.2s;
+          "
         />
-        ${value ? `
-          <button class="search-clear-btn" id="${id}-clear" aria-label="Clear Search">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        ` : ""}
+        <span style="position:absolute;left:16px;top:50%;transform:translateY(-50%);color:#84968B;pointer-events:none;font-size:16px;">🔍</span>
+        <button 
+          type="button" 
+          data-clear="${id}" 
+          style="position:absolute;right:12px;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:50%;background:transparent;border:none;color:#84968B;cursor:pointer;font-size:12px;display:none;font-family:inherit;"
+        >✕</button>
       </div>
     `;
   },
 
-  bindEvents(container, onSearch, id = "global-search-input") {
+  bindEvents(container, onChange, id = "search-input") {
     const input = container.querySelector(`#${id}`);
-    const clearBtn = container.querySelector(`#${id}-clear`);
+    const clearBtn = container.querySelector(`[data-clear="${id}"]`);
 
-    input?.addEventListener("input", (e) => {
-      if (onSearch) onSearch(e.target.value);
+    if (!input) return;
+
+    // Focus glow
+    input.addEventListener("focus", () => {
+      input.style.borderColor = "#1C3E2C";
+      input.style.boxShadow = "0 0 0 3px rgba(28,62,44,0.08)";
+    });
+    input.addEventListener("blur", () => {
+      input.style.borderColor = "#E1E8E1";
+      input.style.boxShadow = "none";
+    });
+
+    let timer = null;
+    input.addEventListener("input", (e) => {
+      const val = e.target.value;
+      if (clearBtn) clearBtn.style.display = val ? "block" : "none";
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (onChange) onChange(val);
+      }, 300);
     });
 
     clearBtn?.addEventListener("click", () => {
-      if (input) {
-        input.value = "";
-        input.focus();
-        if (onSearch) onSearch("");
-      }
+      input.value = "";
+      clearBtn.style.display = "none";
+      input.focus();
+      if (onChange) onChange("");
     });
   }
 };
+
+function escapeAttr(str) {
+  if (str == null) return "";
+  return String(str).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}

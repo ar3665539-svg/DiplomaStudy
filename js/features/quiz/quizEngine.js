@@ -1,133 +1,129 @@
 /**
- * DiplomaStudy - Quiz Engine
- * Interactive stateful quiz session runner with timer, answer evaluation, review and history recording
+ * Quiz Engine - Quiz Logic
  */
 
-import { storage, STORAGE_KEYS } from "../../core/storage.js";
-import { events } from "../../core/events.js";
+import { getSubjects, getChaptersBySubject, getQuestionsByChapter } from "../../services/api.js";
 
-class QuizEngine {
-  constructor() {
-    this.reset();
-  }
+export const quizEngine = {
+  _currentQuiz: null,
 
-  reset() {
-    this.activeQuiz = null;
-    this.currentIndex = 0;
-    this.userAnswers = {}; // questionId -> selectedOption
-    this.timeRemaining = 0;
-    this.timerInterval = null;
-    this.isSubmitted = false;
-    this.result = null;
-    this.startTime = null;
-  }
+  /**
+   * Build a quiz from random MCQs
+   */
+  async buildQuiz(options = {}) {
+    const { count = 10, subjectId = null, chapterId = null } = options;
+    let mcqs = [];
 
-  start(quiz) {
-    this.reset();
-    this.activeQuiz = quiz;
-    this.currentIndex = 0;
-    this.timeRemaining = quiz.durationSeconds || 300;
-    this.startTime = Date.now();
-    this.isSubmitted = false;
-
-    this.timerInterval = setInterval(() => {
-      if (this.timeRemaining > 0) {
-        this.timeRemaining--;
-        events.emit("quiz:tick", this.timeRemaining);
+    try {
+      if (chapterId) {
+        // Single chapter
+        mcqs = await getQuestionsByChapter(chapterId, "mcq");
+      } else if (subjectId) {
+        // All chapters in subject
+        const chapters = await getChaptersBySubject(subjectId);
+        for (const ch of chapters) {
+          const qs = await getQuestionsByChapter(ch.id, "mcq");
+          mcqs.push(...qs.map((q) => ({ ...q, chapterId: ch.id })));
+        }
       } else {
-        this.submit();
+        // All subjects
+        const subjects = await getSubjects();
+        for (const sub of subjects) {
+          const chapters = await getChaptersBySubject(sub.id);
+          for (const ch of chapters) {
+            const qs = await getQuestionsByChapter(ch.id, "mcq");
+            mcqs.push(...qs.map((q) => ({ ...q, subjectId: sub.id, chapterId: ch.id })));
+          }
+        }
       }
-    }, 1000);
-
-    events.emit("quiz:started", this.activeQuiz);
-  }
-
-  selectAnswer(questionId, answerOption) {
-    if (this.isSubmitted) return;
-    this.userAnswers[questionId] = answerOption;
-    events.emit("quiz:answerSelected", { questionId, answerOption });
-  }
-
-  next() {
-    if (!this.activeQuiz) return;
-    if (this.currentIndex < this.activeQuiz.questions.length - 1) {
-      this.currentIndex++;
-      events.emit("quiz:navigated", this.currentIndex);
+    } catch (e) {
+      console.warn("[QuizEngine] Load error:", e);
     }
-  }
 
-  prev() {
-    if (!this.activeQuiz) return;
-    if (this.currentIndex > 0) {
-      this.currentIndex--;
-      events.emit("quiz:navigated", this.currentIndex);
-    }
-  }
+    // Filter valid MCQs
+    const valid = mcqs.filter((q) =>
+      q.question &&
+      q.options &&
+      q.options.length >= 2 &&
+      q.answer
+    );
 
-  goTo(index) {
-    if (!this.activeQuiz) return;
-    if (index >= 0 && index < this.activeQuiz.questions.length) {
-      this.currentIndex = index;
-      events.emit("quiz:navigated", this.currentIndex);
-    }
-  }
+    // Shuffle
+    const shuffled = [...valid].sort(() => Math.random() - 0.5);
+    const selected = shuffled.slice(0, Math.min(count, shuffled.length));
 
-  submit() {
-    if (this.isSubmitted || !this.activeQuiz) return;
-    clearInterval(this.timerInterval);
-    this.isSubmitted = true;
-
-    const total = this.activeQuiz.questions.length;
-    let correctCount = 0;
-    let wrongCount = 0;
-    let unansweredCount = 0;
-
-    const breakdown = this.activeQuiz.questions.map((q) => {
-      const selected = this.userAnswers[q.id] || null;
-      const isCorrect = selected === q.answer;
-      if (!selected) unansweredCount++;
-      else if (isCorrect) correctCount++;
-      else wrongCount++;
-
-      return {
-        questionId: q.id,
-        questionText: q.question,
-        selectedOption: selected,
-        correctAnswer: q.answer,
-        isCorrect,
-        explanation: q.explanation
-      };
-    });
-
-    const accuracy = Math.round((correctCount / total) * 100);
-    const timeSpentSeconds = Math.round((Date.now() - this.startTime) / 1000);
-
-    this.result = {
-      quizId: this.activeQuiz.id,
-      quizTitle: this.activeQuiz.title,
-      subjectName: this.activeQuiz.subjectName || "Engineering",
-      totalQuestions: total,
-      correctCount,
-      wrongCount,
-      unansweredCount,
-      accuracy,
-      timeSpentSeconds,
-      date: new Date().toISOString(),
-      breakdown
+    this._currentQuiz = {
+      questions: selected,
+      current: 0,
+      score: 0,
+      answers: [],
+      total: selected.length,
+      startedAt: Date.now()
     };
 
-    // Save to quiz history in storage
-    const history = storage.get(STORAGE_KEYS.QUIZ_RESULTS, []);
-    history.unshift(this.result);
-    storage.set(STORAGE_KEYS.QUIZ_RESULTS, history.slice(0, 30)); // retain last 30 tests
+    return this._currentQuiz;
+  },
 
-    events.emit("quiz:submitted", this.result);
-    return this.result;
+  getCurrent() {
+    return this._currentQuiz;
+  },
+
+  getCurrentQuestion() {
+    if (!this._currentQuiz) return null;
+    return this._currentQuiz.questions[this._currentQuiz.current] || null;
+  },
+
+  submitAnswer(selectedAnswer) {
+    const q = this.getCurrentQuestion();
+    if (!q) return null;
+
+    const isCorrect = selectedAnswer === q.answer;
+    if (isCorrect) this._currentQuiz.score++;
+
+    const result = {
+      question: q.question,
+      selected: selectedAnswer,
+      correct: q.answer,
+      isCorrect,
+      questionNumber: this._currentQuiz.current + 1
+    };
+
+    this._currentQuiz.answers.push(result);
+    return result;
+  },
+
+  next() {
+    if (!this._currentQuiz) return false;
+    this._currentQuiz.current++;
+    return this._currentQuiz.current < this._currentQuiz.total;
+  },
+
+  isFinished() {
+    if (!this._currentQuiz) return true;
+    return this._currentQuiz.current >= this._currentQuiz.total;
+  },
+
+  getResult() {
+    if (!this._currentQuiz) return null;
+    const score = this._currentQuiz.score;
+    const total = this._currentQuiz.total;
+    const percent = total > 0 ? Math.round((score / total) * 100) : 0;
+    const duration = Date.now() - this._currentQuiz.startedAt;
+
+    return {
+      score,
+      total,
+      percent,
+      duration,
+      answers: this._currentQuiz.answers,
+      emoji: percent >= 80 ? "🏆" : percent >= 60 ? "🎯" : percent >= 40 ? "💪" : "📚",
+      message: percent >= 80 ? "অসাধারণ!" : percent >= 60 ? "ভালো করেছ!" : percent >= 40 ? "আরো practice দরকার" : "চালিয়ে যাও!"
+    };
+  },
+
+  reset() {
+    this._currentQuiz = null;
   }
+};
 
-  getHistory() {
-    return storage.get(STORAGE_KEYS.QUIZ_RESULTS, []);
-  }
-}
-
-export const quizEngine = new QuizEngine();
+export default quizEngine;

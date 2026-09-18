@@ -5,9 +5,6 @@
 
 import { supabase } from "./supabase.js";
 
-// ═══════════════════════════════════════════
-// CONFIG
-// ═══════════════════════════════════════════
 const WATCHED_TABLES = [
   "departments",
   "semesters",
@@ -23,39 +20,22 @@ const WATCHED_TABLES = [
   "quizzes"
 ];
 
-// ═══════════════════════════════════════════
-// STATE
-// ═══════════════════════════════════════════
 let channel = null;
 let isConnected = false;
 let reconnectTimer = null;
 let changeListeners = new Set();
 let statusListeners = new Set();
 
-// ═══════════════════════════════════════════
-// PUBLIC API
-// ═══════════════════════════════════════════
-
-/**
- * Listen for content changes
- * Returns unsubscribe function
- */
 export function onContentChange(callback) {
   changeListeners.add(callback);
   return () => changeListeners.delete(callback);
 }
 
-/**
- * Listen for connection status
- */
 export function onConnectionChange(callback) {
   statusListeners.add(callback);
   return () => statusListeners.delete(callback);
 }
 
-/**
- * Initialize realtime subscriptions
- */
 export function initRealtime() {
   if (channel || isConnected) return;
 
@@ -69,7 +49,6 @@ export function initRealtime() {
       }
     });
 
-    // Subscribe to each watched table
     WATCHED_TABLES.forEach((table) => {
       channel = channel.on(
         "postgres_changes",
@@ -80,7 +59,7 @@ export function initRealtime() {
       );
     });
 
-    channel.subscribe((status, err) => {
+    channel.subscribe((status) => {
       console.log("[Realtime] Status:", status);
 
       if (status === "SUBSCRIBED") {
@@ -101,14 +80,9 @@ export function initRealtime() {
   }
 }
 
-/**
- * Stop all subscriptions
- */
 export function stopRealtime() {
   if (channel) {
-    try {
-      supabase.removeChannel(channel);
-    } catch (e) {}
+    try { supabase.removeChannel(channel); } catch (e) {}
     channel = null;
   }
   isConnected = false;
@@ -119,21 +93,14 @@ export function stopRealtime() {
   }
 }
 
-/**
- * Check if realtime is connected
- */
 export function isRealtimeConnected() {
   return isConnected;
 }
 
-// ═══════════════════════════════════════════
-// INTERNAL HANDLERS
-// ═══════════════════════════════════════════
 function handleChange(table, payload) {
-  const eventType = payload.eventType; // INSERT | UPDATE | DELETE
-  console.log(`[Realtime] ${eventType} on ${table}`, payload);
+  const eventType = payload.eventType;
+  console.log(`[Realtime] ${eventType} on ${table}`);
 
-  // Notify all listeners
   const event = {
     table,
     eventType,
@@ -143,14 +110,9 @@ function handleChange(table, payload) {
   };
 
   changeListeners.forEach((cb) => {
-    try {
-      cb(event);
-    } catch (e) {
-      console.warn("[Realtime] Listener error:", e);
-    }
+    try { cb(event); } catch (e) { console.warn("[Realtime] Listener error:", e); }
   });
 
-  // Also emit a global window event for convenience
   try {
     window.dispatchEvent(new CustomEvent("ds:content-change", { detail: event }));
   } catch (e) {}
@@ -158,9 +120,7 @@ function handleChange(table, payload) {
 
 function notifyStatus(status) {
   statusListeners.forEach((cb) => {
-    try {
-      cb(status);
-    } catch (e) {}
+    try { cb(status); } catch (e) {}
   });
 
   try {
@@ -181,13 +141,8 @@ function scheduleReconnect() {
   }, 5000);
 }
 
-// ═══════════════════════════════════════════
-// AUTO-CLEANUP ON PAGE UNLOAD
-// ═══════════════════════════════════════════
 if (typeof window !== "undefined") {
-  window.addEventListener("beforeunload", () => {
-    stopRealtime();
-  });
+  window.addEventListener("beforeunload", () => { stopRealtime(); });
 }
 
 console.log("[Realtime] Service loaded");

@@ -1,153 +1,93 @@
 /**
- * DiplomaStudy - Suggestions Page View
+ * Suggestions — All suggestions list
  */
 
 import { AppShell } from "../components/AppShell.js";
-import { suggestions } from "../../data/suggestions.js";
-import { bookmarkService } from "../features/bookmark/bookmarkService.js";
-import { router } from "../core/router.js";
-import { SearchBar } from "../components/SearchBar.js";
+import { getSubjects, getSuggestionsBySubject } from "../services/api.js";
+import { listSkeleton } from "../utils/skeleton.js";
+import { errorState, emptyState } from "../utils/errorState.js";
 
-export function renderSuggestions() {
+export async function renderSuggestions(params = {}) {
+  const MY_HASH = "#/suggestions";
+
   AppShell.updateHeader({
-    title: "Super Suggestions",
-    subtitle: "High probability board final topics",
+    title: "Suggestions",
+    subtitle: "Exam suggestions",
     showBack: true,
-    showSearch: true
+    showSearch: false,
+    showTheme: true,
+    showSettings: false,
+    expectedHash: MY_HASH
   });
 
   const main = AppShell.getMainView();
   if (!main) return;
 
-  const categories = [
-    "All",
-    "Most Important",
-    "Very Important",
-    "Important",
-    "Exam Preparation",
-    "Last Minute Revision"
-  ];
+  main.innerHTML = listSkeleton(4, "140px");
 
-  let selectedCategory = "All";
-  let searchQuery = "";
+  let allSuggestions = [];
+  let loadError = null;
 
-  const renderList = () => {
-    const listEl = main.querySelector("#suggestions-list");
-    if (!listEl) return;
-
-    let filtered = suggestions;
-    if (selectedCategory !== "All") {
-      filtered = filtered.filter((s) => s.category === selectedCategory);
-    }
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter((s) =>
-        s.title.toLowerCase().includes(q) ||
-        (s.banglaTitle && s.banglaTitle.toLowerCase().includes(q)) ||
-        s.summary.toLowerCase().includes(q)
-      );
-    }
-
-    if (filtered.length === 0) {
-      listEl.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">🎯</div>
-          <h2 class="empty-state-title">No Suggestions Match</h2>
-          <p class="empty-state-desc">Try another category or clear search terms.</p>
-        </div>
-      `;
-      return;
-    }
-
-    listEl.innerHTML = filtered.map((sug) => {
-      const isBookmarked = bookmarkService.isBookmarked("suggestions", sug.id);
-      return `
-        <div class="card mb-md suggestion-card" data-id="${sug.id}" id="sug-card-${sug.id}">
-          <div class="flex items-start justify-between mb-xs">
-            <div class="flex items-center gap-xs flex-wrap">
-              <span class="badge badge-forest">${sug.category}</span>
-              <span class="badge badge-accent">${sug.categoryBadge}</span>
-              <span class="text-xs text-dim">${sug.subjectName}</span>
-            </div>
-            <button class="header-icon-btn btn-bookmark-sug" data-id="${sug.id}" aria-label="Bookmark suggestion">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="${isBookmarked ? "var(--color-accent)" : "none"}" stroke="${isBookmarked ? "var(--color-accent)" : "currentColor"}" stroke-width="2">
-                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
-              </svg>
-            </button>
-          </div>
-
-          <h3 class="text-sm font-bold text-forest mb-xs">${sug.title}</h3>
-          ${sug.banglaTitle ? `<p class="text-xs text-muted mb-xs font-semibold">${sug.banglaTitle}</p>` : ""}
-
-          <p class="text-xs text-muted mb-sm" style="line-height: 1.4;">${sug.summary}</p>
-
-          <div class="p-xs mb-sm" style="background-color: var(--color-surface-hover); border-radius: var(--radius-xs); border-left: 2px solid var(--color-accent);">
-            <p class="text-xs text-text"><strong class="text-accent">💡 Exam Tip:</strong> ${sug.examTip}</p>
-          </div>
-
-          <div class="flex items-center justify-between pt-xs" style="border-top: 1px dashed var(--color-border);">
-            <span class="text-xs text-dim">${sug.chapterName || "Chapter core"}</span>
-            <button class="btn btn-secondary btn-sm btn-view-sug-q" data-subject="${sug.subjectId}" data-chapter="${sug.chapterId}">
-              <span>View In Question Bank →</span>
-            </button>
-          </div>
-        </div>
-      `;
-    }).join("");
-
-    // Bookmark toggles
-    listEl.querySelectorAll(".btn-bookmark-sug").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-id");
-        const added = bookmarkService.toggle("suggestions", id);
-        const svg = btn.querySelector("svg");
-        if (svg) {
-          svg.setAttribute("fill", added ? "var(--color-accent)" : "none");
-          svg.setAttribute("stroke", added ? "var(--color-accent)" : "currentColor");
-        }
+  try {
+    const subjects = await getSubjects();
+    for (const sub of subjects) {
+      const sug = await getSuggestionsBySubject(sub.id);
+      sug.forEach((s) => {
+        allSuggestions.push({ ...s, subjectName: sub.name, subjectId: sub.id });
       });
-    });
+    }
+  } catch (e) { loadError = e; }
 
-    // Navigate to linked question/chapter
-    listEl.querySelectorAll(".btn-view-sug-q").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const sub = btn.getAttribute("data-subject");
-        const ch = btn.getAttribute("data-chapter");
-        router.navigate(`#/questions?subjectId=${sub}&chapterId=${ch}`);
-      });
+  // Guard
+  if ((window.location.hash || "").split("?")[0] !== MY_HASH) return;
+
+  if (allSuggestions.length === 0) {
+    main.innerHTML = emptyState({
+      icon: "💡",
+      title: "কোনো সাজেশন নেই",
+      message: "Admin Panel থেকে suggestion যোগ করলে এখানে দেখা যাবে।",
+      actionFn: () => window.location.hash = "#/home",
+      actionLabel: "🏠 Home"
     });
-  };
+    return;
+  }
+
+  const catEmoji = { "Most Important": "🔥", "Very Important": "⭐", "Board Top": "🏆", "Last Minute": "⏰" };
 
   main.innerHTML = `
-    <div class="mb-sm">
-      ${SearchBar.render({ placeholder: "Search suggestions, formulas, tips...", id: "sug-search-input" })}
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:linear-gradient(135deg, #FEF3C7, #FDE68A);border:1px solid #FCD34D;border-radius:16px;margin-bottom:18px;">
+      <span style="font-size:22px;">💡</span>
+      <div>
+        <div style="font-size:14px;font-weight:800;color:#92400E;">${allSuggestions.length}টি সাজেশন</div>
+        <div style="font-size:11px;color:#B45309;font-weight:600;">পরীক্ষার জন্য গুরুত্বপূর্ণ</div>
+      </div>
     </div>
 
-    <!-- Category Chips -->
-    <div class="flex items-center gap-xs overflow-x-auto pb-xs mb-md" id="sug-category-chips" style="scrollbar-width: none;">
-      ${categories.map((c) => `
-        <button class="badge ${c === "All" ? "badge-forest active" : "badge-sage"} sug-cat-chip" data-cat="${c}">${c}</button>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      ${allSuggestions.map((s) => `
+        <div style="background:linear-gradient(135deg, #FFFBEB, #FFFFFF);border:1.5px solid #FCD34D;border-radius:16px;padding:16px;">
+          <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+            <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:linear-gradient(135deg,#F59E0B,#D97706);color:#FFFFFF;font-size:10.5px;font-weight:800;border-radius:999px;">${catEmoji[s.category] || "💡"} ${escapeHtml(s.category || "")}</span>
+            <span style="font-size:10.5px;color:#84968B;font-weight:600;">${escapeHtml(s.subjectName || "")}</span>
+          </div>
+          <h3 style="font-size:15px;font-weight:800;color:#78350F;margin:0 0 8px;line-height:1.35;">${escapeHtml(s.title || "")}</h3>
+          <div style="font-size:13.5px;color:#78350F;line-height:1.6;margin-bottom:12px;white-space:pre-wrap;">${escapeHtml(s.summary || "")}</div>
+          ${s.examTip ? `<div style="display:flex;gap:10px;padding:10px 12px;background:rgba(255,255,255,0.7);border-radius:10px;border:1px dashed #FCD34D;">
+            <span style="font-size:18px;">🎯</span>
+            <div>
+              <div style="font-size:10px;font-weight:800;color:#92400E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Exam Tip</div>
+              <div style="font-size:12.5px;color:#78350F;line-height:1.5;">${escapeHtml(s.examTip)}</div>
+            </div>
+          </div>` : ""}
+        </div>
       `).join("")}
     </div>
 
-    <div id="suggestions-list"></div>
+    <div style="height:20px;"></div>
   `;
+}
 
-  main.querySelectorAll(".sug-cat-chip").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      main.querySelectorAll(".sug-cat-chip").forEach((c) => c.classList.remove("badge-forest", "active"));
-      main.querySelectorAll(".sug-cat-chip").forEach((c) => c.classList.add("badge-sage"));
-      chip.classList.remove("badge-sage");
-      chip.classList.add("badge-forest", "active");
-      selectedCategory = chip.getAttribute("data-cat");
-      renderList();
-    });
-  });
-
-  SearchBar.bindEvents(main, (q) => {
-    searchQuery = q.trim();
-    renderList();
-  }, "sug-search-input");
-
-  renderList();
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }

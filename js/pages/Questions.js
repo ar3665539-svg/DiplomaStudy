@@ -1,137 +1,140 @@
 /**
- * DiplomaStudy - Questions Page View
+ * Questions — All questions list (with filters)
  */
 
 import { AppShell } from "../components/AppShell.js";
-import { getQuestionsBySubjectAndChapter } from "../../data/questions.js";
-import { getSubjectById } from "../../data/subjects.js";
-import { bookmarkService } from "../features/bookmark/bookmarkService.js";
-import { QuestionCard } from "../components/QuestionCard.js";
-import { SearchBar } from "../components/SearchBar.js";
-import { storage, STORAGE_KEYS } from "../core/storage.js";
+import { getSubjects, getChaptersBySubject, getQuestionsByChapter } from "../services/api.js";
+import { listSkeleton } from "../utils/skeleton.js";
+import { errorState, emptyState } from "../utils/errorState.js";
 
-export function renderQuestions(params = {}) {
-  const subjectId = params.subjectId || "basic-elec";
-  const chapterId = params.chapterId || "elec-ch1";
-  const subject = getSubjectById(subjectId) || { name: "Question Bank" };
-
-  const allQuestions = getQuestionsBySubjectAndChapter(subjectId, chapterId);
-  const completedList = storage.get(STORAGE_KEYS.PROGRESS, { completedQuestions: [] }).completedQuestions || [];
+export async function renderQuestions(params = {}) {
+  const MY_HASH = "#/questions";
 
   AppShell.updateHeader({
-    title: subject.name,
-    subtitle: "Question Bank & Solutions",
+    title: "Questions",
+    subtitle: "All questions",
     showBack: true,
-    showSearch: true
+    showSearch: false,
+    showTheme: true,
+    showSettings: false,
+    expectedHash: MY_HASH
   });
 
   const main = AppShell.getMainView();
   if (!main) return;
 
-  let activeType = "all";
-  let activeSearch = "";
+  main.innerHTML = listSkeleton(5, "140px");
 
-  const renderCards = () => {
-    const listContainer = main.querySelector("#questions-list-container");
-    if (!listContainer) return;
+  const urlParams = new URLSearchParams(window.location.hash.split("?")[1] || "");
+  const filterType = urlParams.get("type") || "all";
 
-    let filtered = allQuestions;
+  // Load ALL questions across subjects
+  let allQuestions = [];
+  let loadError = null;
 
-    // Filter by type
-    if (activeType === "board") {
-      filtered = filtered.filter((q) => !!q.board);
-    } else if (activeType === "important") {
-      filtered = filtered.filter((q) => !!q.important);
-    } else if (activeType !== "all") {
-      filtered = filtered.filter((q) => q.type === activeType);
-    }
-
-    // Filter by search text
-    if (activeSearch) {
-      const qText = activeSearch.toLowerCase();
-      filtered = filtered.filter((q) =>
-        q.question.toLowerCase().includes(qText) ||
-        (q.questionBangla && q.questionBangla.toLowerCase().includes(qText)) ||
-        q.answer.toLowerCase().includes(qText)
-      );
-    }
-
-    if (filtered.length === 0) {
-      listContainer.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">🔍</div>
-          <h2 class="empty-state-title">No Questions Match Filter</h2>
-          <p class="empty-state-desc">Try clearing the search query or selecting "All Types".</p>
-        </div>
-      `;
-      return;
-    }
-
-    listContainer.innerHTML = filtered.map((q) => {
-      const isBookmarked = bookmarkService.isBookmarked("questions", q.id);
-      const isCompleted = completedList.includes(q.id);
-      return QuestionCard.render(q, { isBookmarked, isCompleted });
-    }).join("");
-
-    QuestionCard.bindEvents(listContainer, {
-      onBookmark: (id, btn) => {
-        const added = bookmarkService.toggle("questions", id);
-        const svg = btn.querySelector("svg");
-        if (svg) {
-          svg.setAttribute("fill", added ? "var(--color-accent)" : "none");
-          svg.setAttribute("stroke", added ? "var(--color-accent)" : "currentColor");
-        }
-      },
-      onToggleComplete: (id, completed) => {
-        const prog = storage.get(STORAGE_KEYS.PROGRESS, { completedQuestions: [] });
-        if (!prog.completedQuestions) prog.completedQuestions = [];
-        const idx = prog.completedQuestions.indexOf(id);
-        if (completed && idx === -1) {
-          prog.completedQuestions.push(id);
-        } else if (!completed && idx > -1) {
-          prog.completedQuestions.splice(idx, 1);
-        }
-        storage.set(STORAGE_KEYS.PROGRESS, prog);
+  try {
+    const subjects = await getSubjects();
+    for (const sub of subjects) {
+      const chapters = await getChaptersBySubject(sub.id);
+      for (const ch of chapters) {
+        const qs = await getQuestionsByChapter(ch.id);
+        qs.forEach((q) => {
+          allQuestions.push({
+            ...q,
+            subjectName: sub.name,
+            chapterName: ch.name,
+            chapterNumber: ch.number,
+            subjectId: sub.id
+          });
+        });
       }
+    }
+  } catch (e) { loadError = e; }
+
+  // Guard
+  if ((window.location.hash || "").split("?")[0] !== MY_HASH) return;
+
+  if (allQuestions.length === 0 && loadError) {
+    main.innerHTML = errorState({ type: "server", message: loadError.message, retryFn: () => renderQuestions(params) });
+    return;
+  }
+
+  let filtered = allQuestions;
+  if (filterType !== "all") filtered = filtered.filter((q) => q.type === filterType);
+
+  if (filtered.length === 0) {
+    main.innerHTML = emptyState({
+      icon: "❓",
+      title: "কোনো প্রশ্ন নেই",
+      message: "Admin Panel থেকে প্রশ্ন যোগ করলে এখানে দেখা যাবে।",
+      actionFn: () => window.location.hash = "#/home",
+      actionLabel: "🏠 Home"
     });
-  };
+    return;
+  }
+
+  const typeEmoji = { creative: "📝", short: "📄", mcq: "⚡" };
+  const typeLabel = { creative: "রচনামূলক", short: "সংক্ষিপ্ত", mcq: "MCQ" };
 
   main.innerHTML = `
-    <!-- Top Search Bar -->
-    <div class="mb-sm">
-      ${SearchBar.render({ placeholder: "Search within this chapter questions...", id: "q-search-input" })}
+    <div style="display:flex;gap:8px;overflow-x:auto;padding:2px 0 12px;margin-bottom:8px;scrollbar-width:none;">
+      ${["all", "creative", "short", "mcq"].map((t) => `
+        <button class="q-chip ${t === filterType ? "active" : ""}" data-tab="${t}" type="button" style="
+          flex:0 0 auto;padding:9px 15px;
+          background:${t === filterType ? "linear-gradient(135deg,#1C3E2C,#2A5540)" : "#FFFFFF"};
+          color:${t === filterType ? "#FFFFFF" : "#57675D"};
+          border:1.5px solid ${t === filterType ? "#1C3E2C" : "#E1E8E1"};
+          border-radius:999px;font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;
+        ">
+          ${t === "all" ? "📋 সব" : `${typeEmoji[t]} ${typeLabel[t]}`}
+          <span style="margin-left:6px;font-size:10px;opacity:0.8;">
+            ${t === "all" ? allQuestions.length : allQuestions.filter((q) => q.type === t).length}
+          </span>
+        </button>
+      `).join("")}
     </div>
 
-    <!-- Filter Chips -->
-    <div class="flex items-center gap-xs overflow-x-auto pb-xs mb-md" id="q-filter-chips" style="scrollbar-width: none;">
-      <button class="badge badge-forest filter-chip active" data-type="all">All (${allQuestions.length})</button>
-      <button class="badge badge-sage filter-chip" data-type="board">Board Qs</button>
-      <button class="badge badge-danger filter-chip" data-type="important">★ Important</button>
-      <button class="badge badge-sage filter-chip" data-type="short">Short</button>
-      <button class="badge badge-sage filter-chip" data-type="mcq">MCQ</button>
-      <button class="badge badge-sage filter-chip" data-type="creative">Creative</button>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      ${filtered.slice(0, 50).map((q) => `
+        <div style="padding:16px;background:#FFFFFF;border:1.5px solid #E1E8E1;border-radius:16px;">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+            <span style="font-size:10px;font-weight:800;color:#065F46;background:#DCFCE7;padding:3px 8px;border-radius:6px;">${typeEmoji[q.type] || "❓"} ${typeLabel[q.type] || q.type}</span>
+            ${q.marks ? `<span style="font-size:10px;font-weight:800;color:#92400E;background:#FEF3C7;padding:3px 8px;border-radius:6px;">🎯 ${q.marks}</span>` : ""}
+            <span style="font-size:10.5px;color:#84968B;font-weight:600;">${escapeHtml(q.subjectName || "")} • Ch.${q.chapterNumber}</span>
+          </div>
+          <div style="font-size:14px;font-weight:700;color:#1C3E2C;line-height:1.5;margin-bottom:12px;">${escapeHtml(q.question || "")}</div>
+          ${q.options && q.options.length > 0 ? `
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              ${q.options.map((opt, i) => {
+                const letter = String.fromCharCode(65 + i);
+                const isCorrect = opt === q.answer;
+                return `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:${isCorrect ? "#DCFCE7" : "#F8FBF8"};border-radius:8px;font-size:12.5px;${isCorrect ? "font-weight:700;color:#065F46;" : "color:#57675D;"}">
+                  <span style="font-weight:800;font-family:ui-monospace,monospace;font-size:11px;">${letter}.</span>
+                  <span>${escapeHtml(opt)}</span>
+                </div>`;
+              }).join("")}
+            </div>
+          ` : `<div style="font-size:13px;color:#57675D;line-height:1.6;padding:10px 12px;background:#F8FBF8;border-radius:8px;border-left:3px solid #1C3E2C;">${escapeHtml(q.answer || "")}</div>`}
+        </div>
+      `).join("")}
     </div>
 
-    <div id="questions-list-container"></div>
+    ${filtered.length > 50 ? `<div style="text-align:center;padding:16px;color:#84968B;font-size:12px;font-weight:600;">প্রথম ৫০টি দেখানো হচ্ছে</div>` : ""}
+
+    <div style="height:20px;"></div>
   `;
 
-  // Bind filter chips
-  main.querySelectorAll(".filter-chip").forEach((chip) => {
+  // Chip switching
+  main.querySelectorAll(".q-chip").forEach((chip) => {
     chip.addEventListener("click", () => {
-      main.querySelectorAll(".filter-chip").forEach((c) => c.classList.remove("badge-forest", "active"));
-      main.querySelectorAll(".filter-chip").forEach((c) => c.classList.add("badge-sage"));
-      chip.classList.remove("badge-sage");
-      chip.classList.add("badge-forest", "active");
-      activeType = chip.getAttribute("data-type");
-      renderCards();
+      const tab = chip.getAttribute("data-tab");
+      const newHash = `#/questions${tab === "all" ? "" : "?type=" + tab}`;
+      window.location.hash = newHash;
     });
   });
+}
 
-  // Bind search input
-  SearchBar.bindEvents(main, (text) => {
-    activeSearch = text.trim();
-    renderCards();
-  }, "q-search-input");
-
-  renderCards();
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }

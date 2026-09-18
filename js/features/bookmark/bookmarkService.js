@@ -1,61 +1,50 @@
 /**
- * DiplomaStudy - Bookmark Service
- * Manages saving and removing questions, subjects, PDFs, formulas, and suggestions
+ * Bookmark Feature - Service
  */
 
-import { storage, STORAGE_KEYS } from "../../core/storage.js";
-import { events } from "../../core/events.js";
-import { Toast } from "../../components/Toast.js";
+const STORAGE_KEY = "diplomastudy_bookmarks";
 
-class BookmarkService {
-  constructor() {
-    this._bookmarks = storage.get(STORAGE_KEYS.BOOKMARKS, {
-      questions: ["q-elec-1", "q-math-1"],
-      subjects: ["basic-elec", "cst-prog-c"],
-      pdfs: ["pdf-elec-handnote"],
-      formulas: ["form-ohm", "form-power"],
-      suggestions: ["sug-1", "sug-2"]
-    });
-  }
-
-  getAll() {
-    return this._bookmarks;
-  }
-
-  getByCategory(category) {
-    if (category === "all") return this._bookmarks;
-    return this._bookmarks[category] || [];
-  }
-
-  isBookmarked(category, id) {
-    if (!this._bookmarks[category]) return false;
-    return this._bookmarks[category].includes(id);
-  }
-
-  toggle(category, id, title = "Item") {
-    if (!this._bookmarks[category]) {
-      this._bookmarks[category] = [];
-    }
-
-    const index = this._bookmarks[category].indexOf(id);
-    let added = false;
-    if (index > -1) {
-      this._bookmarks[category].splice(index, 1);
-      Toast.show(`Removed from bookmarks`, "info");
-    } else {
-      this._bookmarks[category].push(id);
-      Toast.show(`Saved to bookmarks!`, "success");
-      added = true;
-    }
-
-    this._save();
-    events.emit("bookmarks:changed", { category, id, added });
-    return added;
-  }
-
-  _save() {
-    storage.set(STORAGE_KEYS.BOOKMARKS, this._bookmarks);
-  }
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
 }
 
-export const bookmarkService = new BookmarkService();
+function save(list) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); }
+  catch (e) {}
+}
+
+export const bookmarkService = {
+  getAll() { return load().sort((a, b) => b.savedAt - a.savedAt); },
+
+  has(id, type = "chapter") {
+    return load().some((b) => b.id === id && b.type === type);
+  },
+
+  add(item) {
+    const list = load();
+    const idx = list.findIndex((b) => b.id === item.id && b.type === item.type);
+    if (idx >= 0) list[idx] = { ...item, savedAt: Date.now() };
+    else list.push({ ...item, savedAt: Date.now() });
+    save(list);
+    return true;
+  },
+
+  remove(id, type = "chapter") {
+    save(load().filter((b) => !(b.id === id && b.type === type)));
+    return true;
+  },
+
+  toggle(item) {
+    if (this.has(item.id, item.type)) { this.remove(item.id, item.type); return false; }
+    this.add(item);
+    return true;
+  },
+
+  count() { return load().length; },
+  clear() { save([]); }
+};
+
+export default bookmarkService;

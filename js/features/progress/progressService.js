@@ -1,55 +1,71 @@
 /**
- * DiplomaStudy - Progress Service
- * Aggregates statistics, study streaks, and completion metrics
+ * Progress Feature - Service
  */
 
-import { storage, STORAGE_KEYS } from "../../core/storage.js";
-import { subjects } from "../../../data/subjects.js";
+const STORAGE_KEY = "diplomastudy_progress";
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : { chapters: {}, subjects: {}, lastRead: null };
+  } catch (e) { return { chapters: {}, subjects: {}, lastRead: null }; }
+}
+
+function save(data) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+  catch (e) {}
+}
 
 export const progressService = {
-  getSummary() {
-    const studyHistory = storage.get(STORAGE_KEYS.STUDY_HISTORY, {
-      totalMinutes: 780, // approx 13 hours default demo history
-      sessions: 18,
-      dailyMinutes: {}
-    });
+  getAll() { return load(); },
 
-    const quizHistory = storage.get(STORAGE_KEYS.QUIZ_RESULTS, []);
-    const plannerTasks = storage.get(STORAGE_KEYS.PLANNER, []);
-    const bookmarks = storage.get(STORAGE_KEYS.BOOKMARKS, { questions: [] });
-
-    // Calculate quiz accuracy
-    let totalScore = 0;
-    let quizCount = quizHistory.length;
-    let avgAccuracy = 82; // demo fallback
-    if (quizCount > 0) {
-      const sum = quizHistory.reduce((acc, q) => acc + (q.accuracy || 0), 0);
-      avgAccuracy = Math.round(sum / quizCount);
+  markChapterRead(chapterId, meta = {}) {
+    const data = load();
+    if (!data.chapters[chapterId]) {
+      data.chapters[chapterId] = { id: chapterId, firstReadAt: Date.now(), readCount: 0, ...meta };
     }
+    data.chapters[chapterId].readCount = (data.chapters[chapterId].readCount || 0) + 1;
+    data.chapters[chapterId].lastReadAt = Date.now();
+    data.lastRead = { chapterId, ...meta, at: Date.now() };
+    save(data);
+  },
 
-    const completedTasks = plannerTasks.filter((t) => t.isCompleted).length;
+  isChapterRead(chapterId) {
+    return !!load().chapters[chapterId];
+  },
 
-    // Study streak
-    const streak = storage.get(STORAGE_KEYS.STREAK, 5);
+  getChapterReadCount(chapterId) {
+    return load().chapters[chapterId]?.readCount || 0;
+  },
 
-    const totalHours = (studyHistory.totalMinutes / 60).toFixed(1);
+  getSubjectProgress(subjectId, totalChapters = 0) {
+    const data = load();
+    const readInSubject = Object.values(data.chapters).filter((c) => c.subjectId === subjectId).length;
+    const percent = totalChapters > 0 ? Math.round((readInSubject / totalChapters) * 100) : 0;
+    return { read: readInSubject, total: totalChapters, percent };
+  },
 
-    return {
-      streak,
-      longestStreak: Math.max(streak, 12),
-      totalHours,
-      totalMinutes: studyHistory.totalMinutes,
-      totalSessions: studyHistory.sessions,
-      quizAccuracy: avgAccuracy,
-      quizzesTaken: quizCount,
-      completedTasks,
-      savedQuestionsCount: (bookmarks.questions || []).length,
-      subjectCompletion: subjects.map((s) => ({
-        id: s.id,
-        name: s.name,
-        code: s.code,
-        progress: s.progress || 0
-      }))
-    };
-  }
+  getLastRead() { return load().lastRead; },
+  getTotalRead() { return Object.keys(load().chapters).length; },
+
+  getWeeklyActivity() {
+    const data = load();
+    const result = {};
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today); d.setDate(d.getDate() - i);
+      result[d.toISOString().slice(0, 10)] = 0;
+    }
+    Object.values(data.chapters).forEach((c) => {
+      const ts = c.lastReadAt || c.firstReadAt;
+      if (!ts) return;
+      const key = new Date(ts).toISOString().slice(0, 10);
+      if (result[key] !== undefined) result[key]++;
+    });
+    return result;
+  },
+
+  reset() { save({ chapters: {}, subjects: {}, lastRead: null }); }
 };
+
+export default progressService;

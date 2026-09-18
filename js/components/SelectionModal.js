@@ -1,185 +1,165 @@
 /**
- * DiplomaStudy - Selection Modal
- * Department + Semester পরিবর্তনের Modal
+ * SelectionModal — Department + Semester combined picker
  */
 
+import { getDepartments, getSemestersByDepartment } from "../services/api.js";
 import { storage, STORAGE_KEYS } from "../core/storage.js";
-import { events } from "../core/events.js";
-
-// ═══════════════════════════════════════════
-// DEPARTMENTS
-// ═══════════════════════════════════════════
-const DEPARTMENTS = [
-  { id: "civil",       name: "Civil Technology",       bangla: "সিভিল টেকনোলজি",          icon: "🏗️", active: true },
-  { id: "computer",    name: "Computer Technology",    bangla: "কম্পিউটার টেকনোলজি",      icon: "💻", active: false },
-  { id: "electrical",  name: "Electrical Technology",  bangla: "ইলেকট্রিক্যাল টেকনোলজি",   icon: "⚡", active: false },
-  { id: "mechanical",  name: "Mechanical Technology",  bangla: "মেকানিক্যাল টেকনোলজি",     icon: "⚙️", active: false },
-  { id: "electronics", name: "Electronics Technology", bangla: "ইলেকট্রনিক্স টেকনোলজি",   icon: "📟", active: false },
-  { id: "power",       name: "Power Technology",       bangla: "পাওয়ার টেকনোলজি",         icon: "🔋", active: false },
-  { id: "telecom",     name: "Telecommunication",      bangla: "টেলিকমিউনিকেশন",           icon: "📡", active: false },
-  { id: "automobile",  name: "Automobile Technology",  bangla: "অটোমোবাইল টেকনোলজি",      icon: "🚗", active: false }
-];
-
-// ═══════════════════════════════════════════
-// SEMESTERS
-// ═══════════════════════════════════════════
-const SEMESTERS = [
-  { id: 1, name: "1st Semester", bangla: "১ম পর্ব",  roman: "I",    active: true },
-  { id: 2, name: "2nd Semester", bangla: "২য় পর্ব",  roman: "II",   active: false },
-  { id: 3, name: "3rd Semester", bangla: "৩য় পর্ব",  roman: "III",  active: false },
-  { id: 4, name: "4th Semester", bangla: "৪র্থ পর্ব", roman: "IV",   active: false },
-  { id: 5, name: "5th Semester", bangla: "৫ম পর্ব",   roman: "V",    active: false },
-  { id: 6, name: "6th Semester", bangla: "৬ষ্ঠ পর্ব", roman: "VI",   active: false },
-  { id: 7, name: "7th Semester", bangla: "৭ম পর্ব",   roman: "VII",  active: false },
-  { id: 8, name: "8th Semester", bangla: "৮ম পর্ব",   roman: "VIII", active: false }
-];
 
 export const SelectionModal = {
-  show(onSave) {
-    // Remove existing
-    document.getElementById("selection-modal")?.remove();
-
-    // Get current
-    const settings = storage.get(STORAGE_KEYS.SETTINGS, {});
-    let selectedDept = settings.department || "civil";
-    let selectedSem = settings.semester || 1;
+  async show(onComplete) {
+    document.getElementById("ds-selection-modal")?.remove();
 
     const overlay = document.createElement("div");
-    overlay.id = "selection-modal";
-    overlay.className = "modal-overlay";
-    overlay.style.cssText = "display: flex; align-items: flex-end; justify-content: center; padding: 0;";
+    overlay.id = "ds-selection-modal";
+    overlay.style.cssText = `
+      position:fixed;inset:0;background:rgba(15,23,42,0.75);
+      backdrop-filter:blur(8px);z-index:9999;
+      display:flex;align-items:flex-end;justify-content:center;
+      animation:fadeIn 0.2s ease;
+    `;
 
-    const renderContent = () => {
-      overlay.innerHTML = `
-        <div class="selection-modal-content">
-          
-          <!-- Header -->
-          <div class="sm-header">
-            <div>
-              <h2 class="sm-title">🔄 পরিবর্তন করুন</h2>
-              <p class="sm-subtitle">Department এবং Semester নির্বাচন করুন</p>
-            </div>
-            <button class="sm-close" id="sm-close">✕</button>
-          </div>
-
-          <!-- Body -->
-          <div class="sm-body">
-            
-            <!-- Department -->
-            <div class="sm-section">
-              <div class="sm-section-header">
-                <span class="sm-section-num">১</span>
-                <div>
-                  <h3 class="sm-section-title">Department</h3>
-                  <p class="sm-section-desc">আপনার Technology</p>
-                </div>
-              </div>
-              <div class="dept-grid-onb">
-                ${DEPARTMENTS.map(d => `
-                  <button 
-                    class="dept-card-onb ${selectedDept === d.id ? "active" : ""} ${!d.active ? "locked" : ""}" 
-                    data-dept-id="${d.id}"
-                  >
-                    <div class="dept-onb-icon">${d.icon}</div>
-                    <div class="dept-onb-name">${d.name}</div>
-                    <div class="dept-onb-bangla">${d.bangla}</div>
-                    ${!d.active ? '<span class="dept-onb-lock">🔒</span>' : ''}
-                    ${selectedDept === d.id && d.active ? '<span class="dept-onb-check">✓</span>' : ''}
-                  </button>
-                `).join("")}
-              </div>
-            </div>
-
-            <!-- Semester -->
-            <div class="sm-section">
-              <div class="sm-section-header">
-                <span class="sm-section-num">২</span>
-                <div>
-                  <h3 class="sm-section-title">Semester</h3>
-                  <p class="sm-section-desc">আপনার চলমান পর্ব</p>
-                </div>
-              </div>
-              <div class="sem-grid-onb">
-                ${SEMESTERS.map(s => `
-                  <button 
-                    class="sem-card-onb ${selectedSem === s.id ? "active" : ""} ${!s.active ? "locked" : ""}" 
-                    data-sem-id="${s.id}"
-                  >
-                    <div class="sem-onb-roman">${s.roman}</div>
-                    <div class="sem-onb-name">${s.name}</div>
-                    <div class="sem-onb-bangla">${s.bangla}</div>
-                    ${!s.active ? '<span class="sem-onb-lock">🔒</span>' : ''}
-                    ${selectedSem === s.id && s.active ? '<span class="sem-onb-check">✓</span>' : ''}
-                  </button>
-                `).join("")}
-              </div>
-            </div>
-
-          </div>
-
-          <!-- Footer -->
-          <div class="sm-footer">
-            <button class="sm-btn sm-btn-cancel" id="sm-cancel">বাতিল</button>
-            <button class="sm-btn sm-btn-save" id="sm-save">
-              ✅ পরিবর্তন করুন
-            </button>
-          </div>
-
+    overlay.innerHTML = `
+      <div style="
+        background:#FFFFFF;width:100%;max-width:520px;
+        border-radius:24px 24px 0 0;padding:24px;
+        max-height:85vh;overflow-y:auto;
+        box-shadow:0 -12px 40px rgba(0,0,0,0.3);
+      ">
+        <div style="width:40px;height:4px;background:#E1E8E1;border-radius:999px;margin:0 auto 20px;"></div>
+        <div style="text-align:center;padding:40px 20px;">
+          <div class="spinner"></div>
         </div>
-      `;
-
-      // Bind dept cards
-      overlay.querySelectorAll(".dept-card-onb").forEach((card) => {
-        card.addEventListener("click", () => {
-          const deptId = card.getAttribute("data-dept-id");
-          const dept = DEPARTMENTS.find(d => d.id === deptId);
-          if (!dept || !dept.active) return;
-          selectedDept = deptId;
-          renderContent();
-        });
-      });
-
-      // Bind sem cards
-      overlay.querySelectorAll(".sem-card-onb").forEach((card) => {
-        card.addEventListener("click", () => {
-          const semId = parseInt(card.getAttribute("data-sem-id"), 10);
-          const sem = SEMESTERS.find(s => s.id === semId);
-          if (!sem || !sem.active) return;
-          selectedSem = semId;
-          renderContent();
-        });
-      });
-
-      // Close
-      overlay.querySelector("#sm-close")?.addEventListener("click", close);
-      overlay.querySelector("#sm-cancel")?.addEventListener("click", close);
-
-      // Save
-      overlay.querySelector("#sm-save")?.addEventListener("click", () => {
-        const newSettings = storage.get(STORAGE_KEYS.SETTINGS, {});
-        newSettings.department = selectedDept;
-        newSettings.semester = selectedSem;
-        storage.set(STORAGE_KEYS.SETTINGS, newSettings);
-
-        // Emit change events
-        events.emit("state:departmentChange", selectedDept);
-        events.emit("state:semesterChange", selectedSem);
-
-        // Close
-        close();
-
-        // Callback
-        if (onSave) onSave(selectedDept, selectedSem);
-      });
-    };
-
-    const close = () => overlay.remove();
-
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) close();
-    });
+      </div>
+    `;
 
     document.body.appendChild(overlay);
-    renderContent();
+    const close = () => overlay.remove();
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+    // Load
+    let departments = [];
+    try { departments = await getDepartments(); } catch (e) {}
+
+    if (departments.length === 0) {
+      overlay.querySelector("div").innerHTML = `
+        <div style="text-align:center;padding:40px 20px;">
+          <div style="font-size:56px;margin-bottom:12px;">🏛️</div>
+          <h3 style="font-size:16px;font-weight:800;color:#1C3E2C;margin:0 0 8px;">কোনো Department নেই</h3>
+          <p style="font-size:12.5px;color:#84968B;">Admin Panel থেকে department যোগ করুন।</p>
+        </div>
+      `;
+      return;
+    }
+
+    const settings = storage.get(STORAGE_KEYS.SETTINGS, {});
+    let selectedDeptId = settings.departmentId || settings.department || departments[0].id;
+    let selectedSemId = settings.semesterId || settings.semester || "";
+    let semesters = [];
+
+    const modal = overlay.querySelector("div");
+    modal.innerHTML = `
+      <div style="width:40px;height:4px;background:#E1E8E1;border-radius:999px;margin:0 auto 16px;"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h3 style="font-size:17px;font-weight:900;color:#1C3E2C;margin:0;letter-spacing:-0.3px;">Department & Semester</h3>
+        <button data-close style="width:32px;height:32px;border-radius:10px;background:#F2F5F2;border:none;color:#57675D;font-size:14px;cursor:pointer;font-family:inherit;">✕</button>
+      </div>
+      <div id="step-dept">
+        <div style="font-size:11px;font-weight:800;color:#84968B;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;">১. Department নির্বাচন করুন</div>
+        <div id="dept-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;"></div>
+      </div>
+      <div id="step-sem" style="display:none;">
+        <div style="font-size:11px;font-weight:800;color:#84968B;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;">২. Semester নির্বাচন করুন</div>
+        <div id="sem-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+    `;
+
+    modal.querySelector("[data-close]").onclick = close;
+
+    const deptList = modal.querySelector("#dept-list");
+    const stepSem = modal.querySelector("#step-sem");
+    const semList = modal.querySelector("#sem-list");
+
+    deptList.innerHTML = departments.map((d) => `
+      <button class="dept-pick" data-id="${d.id}" style="
+        display:flex;align-items:center;gap:12px;padding:14px;
+        background:${d.id === selectedDeptId ? "#DCFCE7" : "#F8FBF8"};
+        border:1.5px solid ${d.id === selectedDeptId ? "#10B981" : "#E1E8E1"};
+        border-radius:14px;cursor:pointer;font-family:inherit;text-align:left;width:100%;
+      ">
+        <div style="width:44px;height:44px;border-radius:13px;background:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">${d.icon || "🏛️"}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13.5px;font-weight:800;color:#1C3E2C;">${escapeHtml(d.name)}</div>
+          ${d.banglaName ? `<div style="font-size:11px;color:#84968B;font-weight:600;">${escapeHtml(d.banglaName)}</div>` : ""}
+        </div>
+      </button>
+    `).join("");
+
+    async function loadSemesters(deptId) {
+      stepSem.style.display = "block";
+      semList.innerHTML = `<div style="text-align:center;padding:20px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
+
+      try {
+        semesters = await getSemestersByDepartment(deptId);
+      } catch (e) { semesters = []; }
+
+      if (semesters.length === 0) {
+        semList.innerHTML = `<div style="padding:20px;text-align:center;background:#FEF3C7;border:1.5px dashed #FCD34D;border-radius:14px;">
+          <div style="font-size:13px;font-weight:800;color:#92400E;">কোনো Semester নেই</div>
+        </div>`;
+        return;
+      }
+
+      semList.innerHTML = semesters.map((s) => `
+        <button class="sem-pick" data-id="${s.id}" data-number="${s.number}" style="
+          display:flex;align-items:center;gap:12px;padding:14px;
+          background:${s.id === selectedSemId ? "#DCFCE7" : "#F8FBF8"};
+          border:1.5px solid ${s.id === selectedSemId ? "#10B981" : "#E1E8E1"};
+          border-radius:14px;cursor:pointer;font-family:inherit;text-align:left;width:100%;
+        ">
+          <div style="width:44px;height:44px;border-radius:13px;background:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">${s.icon || "📅"}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13.5px;font-weight:800;color:#1C3E2C;">${escapeHtml(s.name)}</div>
+            <div style="font-size:11px;color:#84968B;font-weight:600;">Semester ${s.number}</div>
+          </div>
+        </button>
+      `).join("");
+
+      semList.querySelectorAll(".sem-pick").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const semId = btn.getAttribute("data-id");
+          const semNum = parseInt(btn.getAttribute("data-number"), 10);
+          const ns = storage.get(STORAGE_KEYS.SETTINGS, {});
+          ns.department = selectedDeptId;
+          ns.departmentId = selectedDeptId;
+          ns.semester = semId;
+          ns.semesterId = semId;
+          ns.semesterNumber = semNum;
+          storage.set(STORAGE_KEYS.SETTINGS, ns);
+          close();
+          if (onComplete) onComplete(selectedDeptId, semId);
+          else setTimeout(() => window.location.reload(), 100);
+        });
+      });
+    }
+
+    deptList.querySelectorAll(".dept-pick").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        selectedDeptId = btn.getAttribute("data-id");
+        selectedSemId = "";
+        deptList.querySelectorAll(".dept-pick").forEach((b) => {
+          const isThis = b.getAttribute("data-id") === selectedDeptId;
+          b.style.background = isThis ? "#DCFCE7" : "#F8FBF8";
+          b.style.borderColor = isThis ? "#10B981" : "#E1E8E1";
+        });
+        loadSemesters(selectedDeptId);
+      });
+    });
+
+    if (selectedDeptId) loadSemesters(selectedDeptId);
   }
 };
+
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}

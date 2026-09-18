@@ -1,49 +1,58 @@
 /**
- * DiplomaStudy - Notification Service
- * Handles browser notifications with permission checks and graceful fallbacks
+ * DiplomaStudy - Notification Service (Toast-based)
  */
 
 import { Toast } from "../components/Toast.js";
 
+const STORAGE_KEY = "diplomastudy_notifications";
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+
+function save(list) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(-50))); }
+  catch (e) {}
+}
+
 export const notificationService = {
-  isSupported() {
-    return "Notification" in window;
+  push(message, type = "info") {
+    const list = load();
+    list.push({ id: "n-" + Date.now(), message, type, at: Date.now(), read: false });
+    save(list);
+
+    // Show toast immediately
+    Toast.show(message, type);
   },
 
-  async requestPermission() {
-    if (!this.isSupported()) {
-      Toast.show("Notifications not supported in this browser", "warning");
-      return false;
-    }
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission === "granted") {
-        Toast.show("Study reminders enabled!", "success");
-        return true;
-      }
-      Toast.show("Notifications permission denied", "info");
-      return false;
-    } catch (err) {
-      console.warn("[NotificationService] Permission request error:", err);
-      return false;
-    }
+  getAll() {
+    return load().sort((a, b) => b.at - a.at);
   },
 
-  notify(title, options = {}) {
-    if (!this.isSupported() || Notification.permission !== "granted") {
-      // Fallback to in-app Toast
-      Toast.show(title, "info");
-      return;
-    }
+  getUnread() {
+    return load().filter((n) => !n.read);
+  },
 
-    try {
-      new Notification(title, {
-        icon: "/assets/icons/icon-192.png",
-        badge: "/assets/icons/icon-192.png",
-        ...options
-      });
-    } catch (err) {
-      Toast.show(title, "info");
-    }
+  getUnreadCount() {
+    return this.getUnread().length;
+  },
+
+  markAsRead(id) {
+    const list = load().map((n) => n.id === id ? { ...n, read: true } : n);
+    save(list);
+  },
+
+  markAllAsRead() {
+    const list = load().map((n) => ({ ...n, read: true }));
+    save(list);
+  },
+
+  clear() {
+    save([]);
   }
 };
+
+export default notificationService;

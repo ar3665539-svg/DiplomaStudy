@@ -1,6 +1,10 @@
 /**
- * DiplomaStudy - Home Page v6 (Real Server Pickers)
- * Department + Semester — শুধু server-এর data
+ * DiplomaStudy - Home Page v7 (Professional)
+ * + Skeleton loader
+ * + Error state with retry
+ * + Pull to refresh
+ * + Modern toast
+ * + Offline detection
  */
 
 import { AppShell } from "../components/AppShell.js";
@@ -11,6 +15,16 @@ import {
   getSubjects,
   getNotices
 } from "../services/api.js";
+import { homeSkeleton } from "../utils/skeleton.js";
+import { errorState, emptyState } from "../utils/errorState.js";
+import { attachPullToRefresh } from "../utils/pullToRefresh.js";
+import { Toast } from "../components/Toast.js";
+import { isOnline, onConnectionChange } from "../utils/apiWrapper.js";
+
+// ═══════════════════════════════════════════
+// CLEANUP TRACKER
+// ═══════════════════════════════════════════
+let currentCleanup = null;
 
 // ═══════════════════════════════════════════
 // STUDY GOAL
@@ -55,290 +69,7 @@ function updateStreak() {
 }
 
 // ═══════════════════════════════════════════
-// COMBINED PICKER MODAL
-// Shows departments → then semesters for that dept
-// ═══════════════════════════════════════════
-async function showDeptSemPicker(currentDeptId, currentSemId) {
-  document.getElementById("ds-picker")?.remove();
-
-  const overlay = document.createElement("div");
-  overlay.id = "ds-picker";
-  overlay.style.cssText = `
-    position:fixed;inset:0;background:rgba(15,23,42,0.75);
-    backdrop-filter:blur(8px);z-index:9999;
-    display:flex;align-items:flex-end;justify-content:center;
-    animation:fadeIn 0.2s ease;
-  `;
-
-  // Loading state first
-  overlay.innerHTML = `
-    <div style="
-      background:#FFFFFF;width:100%;max-width:520px;
-      border-radius:24px 24px 0 0;padding:24px;
-      max-height:85vh;overflow-y:auto;
-      box-shadow:0 -12px 40px rgba(0,0,0,0.3);
-    ">
-      <div style="width:40px;height:4px;background:#E1E8E1;border-radius:999px;margin:0 auto 20px;"></div>
-      <div style="text-align:center;padding:40px 20px;">
-        <div class="spinner"></div>
-        <p style="margin-top:14px;color:#84968B;font-size:13px;font-weight:600;">Loading...</p>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(overlay);
-
-  const close = () => overlay.remove();
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
-
-  // Load departments from server
-  let departments = [];
-  try {
-    departments = await getDepartments();
-  } catch (e) {
-    console.error("[Picker] Dept load failed:", e);
-  }
-
-  if (departments.length === 0) {
-    overlay.querySelector("div > div").innerHTML = `
-      <div style="text-align:center;padding:40px 20px;">
-        <div style="font-size:56px;margin-bottom:12px;">🏛️</div>
-        <h3 style="font-size:16px;font-weight:800;color:#1C3E2C;margin:0 0 8px;">কোনো Department নেই</h3>
-        <p style="font-size:12.5px;color:#84968B;line-height:1.5;">Admin Panel থেকে department যোগ করুন।</p>
-      </div>
-    `;
-    return;
-  }
-
-  // Render UI
-  const modal = overlay.querySelector("div");
-  modal.innerHTML = `
-    <div style="width:40px;height:4px;background:#E1E8E1;border-radius:999px;margin:0 auto 16px;"></div>
-
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-      <h3 style="font-size:17px;font-weight:900;color:#1C3E2C;margin:0;letter-spacing:-0.3px;">
-        Department & Semester
-      </h3>
-      <button data-close style="
-        width:32px;height:32px;border-radius:10px;
-        background:#F2F5F2;border:none;
-        color:#57675D;font-size:14px;cursor:pointer;
-        font-family:inherit;
-      ">✕</button>
-    </div>
-
-    <!-- Step 1: Department -->
-    <div id="step-dept">
-      <div style="
-        display:flex;align-items:center;gap:6px;
-        font-size:11px;font-weight:800;color:#84968B;
-        text-transform:uppercase;letter-spacing:0.8px;
-        margin-bottom:10px;
-      ">
-        <span style="
-          display:inline-flex;align-items:center;justify-content:center;
-          width:20px;height:20px;border-radius:50%;
-          background:#1C3E2C;color:#FFFFFF;font-size:11px;
-        ">1</span>
-        <span>Department নির্বাচন করুন</span>
-      </div>
-      <div id="dept-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;"></div>
-    </div>
-
-    <!-- Step 2: Semester (hidden until dept selected) -->
-    <div id="step-sem" style="display:none;">
-      <div style="
-        display:flex;align-items:center;gap:6px;
-        font-size:11px;font-weight:800;color:#84968B;
-        text-transform:uppercase;letter-spacing:0.8px;
-        margin-bottom:10px;
-      ">
-        <span style="
-          display:inline-flex;align-items:center;justify-content:center;
-          width:20px;height:20px;border-radius:50%;
-          background:#1C3E2C;color:#FFFFFF;font-size:11px;
-        ">2</span>
-        <span>Semester নির্বাচন করুন</span>
-      </div>
-      <div id="sem-list" style="display:flex;flex-direction:column;gap:8px;"></div>
-    </div>
-  `;
-
-  modal.querySelector("[data-close]").onclick = close;
-
-  // ═══════════════════════════════════════════
-  // RENDER DEPARTMENTS
-  // ═══════════════════════════════════════════
-  const deptList = modal.querySelector("#dept-list");
-
-  function renderDepartments() {
-    deptList.innerHTML = departments.map((d) => `
-      <button class="dept-opt" data-dept-id="${d.id}" style="
-        display:flex;align-items:center;gap:12px;
-        padding:14px;
-        background:${d.id === currentDeptId ? "#DCFCE7" : "#F8FBF8"};
-        border:1.5px solid ${d.id === currentDeptId ? "#10B981" : "#E1E8E1"};
-        border-radius:14px;cursor:pointer;font-family:inherit;
-        text-align:left;width:100%;
-        transition:all 0.15s ease;
-        -webkit-tap-highlight-color:transparent;
-      ">
-        <div style="
-          width:44px;height:44px;border-radius:13px;
-          background:#FFFFFF;
-          display:flex;align-items:center;justify-content:center;
-          font-size:22px;flex-shrink:0;
-          box-shadow:0 2px 6px rgba(28,62,44,0.06);
-        ">${d.icon || "🏛️"}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="
-            font-size:13.5px;font-weight:800;color:#1C3E2C;
-            letter-spacing:-0.2px;margin-bottom:2px;
-          ">${escapeHtml(d.name)}</div>
-          ${d.banglaName ? `<div style="font-size:11px;color:#84968B;font-weight:600;">${escapeHtml(d.banglaName)}</div>` : ""}
-        </div>
-        ${d.id === currentDeptId ? `
-          <span style="color:#10B981;font-size:16px;font-weight:900;">✓</span>
-        ` : `
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#84968B" stroke-width="2.5" stroke-linecap="round">
-            <polyline points="9 18 15 12 9 6"></polyline>
-          </svg>
-        `}
-      </button>
-    `).join("");
-
-    deptList.querySelectorAll(".dept-opt").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const deptId = btn.getAttribute("data-dept-id");
-        loadSemesters(deptId);
-      });
-    });
-  }
-
-  // ═══════════════════════════════════════════
-  // LOAD SEMESTERS FOR SELECTED DEPT
-  // ═══════════════════════════════════════════
-  async function loadSemesters(deptId) {
-    const stepDept = modal.querySelector("#step-dept");
-    const stepSem = modal.querySelector("#step-sem");
-    const semList = modal.querySelector("#sem-list");
-
-    // Highlight selected dept
-    deptList.querySelectorAll(".dept-opt").forEach((btn) => {
-      const isThis = btn.getAttribute("data-dept-id") === deptId;
-      btn.style.background = isThis ? "#DCFCE7" : "#F8FBF8";
-      btn.style.borderColor = isThis ? "#10B981" : "#E1E8E1";
-    });
-
-    // Show loading
-    stepSem.style.display = "block";
-    semList.innerHTML = `
-      <div style="text-align:center;padding:24px;">
-        <div class="spinner" style="margin:0 auto;"></div>
-        <p style="margin-top:10px;font-size:12px;color:#84968B;">Semesters loading...</p>
-      </div>
-    `;
-
-    // Fetch semesters from server
-    let semesters = [];
-    try {
-      semesters = await getSemestersByDepartment(deptId);
-      console.log(`[Picker] Loaded ${semesters.length} semesters for dept ${deptId}`);
-    } catch (e) {
-      console.error("[Picker] Semester load failed:", e);
-    }
-
-    if (semesters.length === 0) {
-      semList.innerHTML = `
-        <div style="
-          padding:24px 16px;text-align:center;
-          background:#FEF3C7;
-          border:1.5px dashed #FCD34D;
-          border-radius:14px;
-        ">
-          <div style="font-size:36px;margin-bottom:8px;">📅</div>
-          <div style="font-size:13px;font-weight:800;color:#92400E;margin-bottom:4px;">কোনো Semester নেই</div>
-          <div style="font-size:11.5px;color:#B45309;line-height:1.5;">
-            এই department-এ এখনো কোনো semester যোগ করা হয়নি।
-          </div>
-        </div>
-      `;
-      return;
-    }
-
-    // Render semesters
-    semList.innerHTML = semesters.map((s) => `
-      <button class="sem-opt" data-sem-id="${s.id}" data-sem-num="${s.number}" style="
-        display:flex;align-items:center;gap:12px;
-        padding:14px;
-        background:${s.id === currentSemId ? "#DCFCE7" : "#F8FBF8"};
-        border:1.5px solid ${s.id === currentSemId ? "#10B981" : "#E1E8E1"};
-        border-radius:14px;cursor:pointer;font-family:inherit;
-        text-align:left;width:100%;
-        transition:all 0.15s ease;
-        -webkit-tap-highlight-color:transparent;
-      ">
-        <div style="
-          width:44px;height:44px;border-radius:13px;
-          background:#FFFFFF;
-          display:flex;align-items:center;justify-content:center;
-          font-size:22px;flex-shrink:0;
-          box-shadow:0 2px 6px rgba(28,62,44,0.06);
-        ">${s.icon || "📅"}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="
-            font-size:13.5px;font-weight:800;color:#1C3E2C;
-            letter-spacing:-0.2px;margin-bottom:2px;
-          ">${escapeHtml(s.name)}</div>
-          <div style="font-size:11px;color:#84968B;font-weight:600;">
-            Semester ${s.number}
-          </div>
-        </div>
-        ${s.id === currentSemId ? `<span style="color:#10B981;font-size:16px;font-weight:900;">✓</span>` : ""}
-      </button>
-    `).join("");
-
-    // Bind semester selection
-    semList.querySelectorAll(".sem-opt").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const semId = btn.getAttribute("data-sem-id");
-        const semNum = parseInt(btn.getAttribute("data-sem-num"), 10);
-
-        // Save to storage
-        const ns = storage.get(STORAGE_KEYS.SETTINGS, {});
-        ns.department = deptId;
-        ns.departmentId = deptId;
-        ns.semester = semId;
-        ns.semesterId = semId;
-        ns.semesterNumber = semNum;
-        storage.set(STORAGE_KEYS.SETTINGS, ns);
-
-        console.log("[Picker] Selected:", { deptId, semId, semNum });
-
-        close();
-
-        // Reload home page
-        setTimeout(() => window.location.reload(), 150);
-      });
-    });
-
-    // Scroll to semesters
-    setTimeout(() => {
-      stepSem.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 100);
-  }
-
-  // Initial render
-  renderDepartments();
-
-  // If already has dept, preload its semesters
-  if (currentDeptId) {
-    loadSemesters(currentDeptId);
-  }
-}
-
-// ═══════════════════════════════════════════
-// INLINE MODAL (for coming soon)
+// INLINE MODAL
 // ═══════════════════════════════════════════
 function showInlineModal(title, message) {
   document.getElementById("ds-inline-modal")?.remove();
@@ -379,29 +110,248 @@ function showInlineModal(title, message) {
 }
 
 // ═══════════════════════════════════════════
-// MAIN
+// DEPARTMENT PICKER
+// ═══════════════════════════════════════════
+async function showDeptSemPicker(currentDeptId, currentSemId) {
+  document.getElementById("ds-picker")?.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "ds-picker";
+  overlay.style.cssText = `
+    position:fixed;inset:0;background:rgba(15,23,42,0.75);
+    backdrop-filter:blur(8px);z-index:9999;
+    display:flex;align-items:flex-end;justify-content:center;
+  `;
+
+  overlay.innerHTML = `
+    <div style="
+      background:#FFFFFF;width:100%;max-width:520px;
+      border-radius:24px 24px 0 0;padding:24px;
+      max-height:85vh;overflow-y:auto;
+      box-shadow:0 -12px 40px rgba(0,0,0,0.3);
+    ">
+      <div style="width:40px;height:4px;background:#E1E8E1;border-radius:999px;margin:0 auto 20px;"></div>
+      <div style="text-align:center;padding:40px 20px;">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+
+  let departments = [];
+  try { departments = await getDepartments(); } catch (e) {}
+
+  if (departments.length === 0) {
+    overlay.querySelector("div").innerHTML = `
+      <div style="text-align:center;padding:40px 20px;">
+        <div style="font-size:56px;margin-bottom:12px;">🏛️</div>
+        <h3 style="font-size:16px;font-weight:800;color:#1C3E2C;margin:0 0 8px;">কোনো Department নেই</h3>
+        <p style="font-size:12.5px;color:#84968B;line-height:1.5;">Admin Panel থেকে department যোগ করুন।</p>
+      </div>
+    `;
+    return;
+  }
+
+  const modal = overlay.querySelector("div");
+  modal.innerHTML = `
+    <div style="width:40px;height:4px;background:#E1E8E1;border-radius:999px;margin:0 auto 16px;"></div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <h3 style="font-size:17px;font-weight:900;color:#1C3E2C;margin:0;letter-spacing:-0.3px;">
+        Department & Semester
+      </h3>
+      <button data-close style="
+        width:32px;height:32px;border-radius:10px;
+        background:#F2F5F2;border:none;
+        color:#57675D;font-size:14px;cursor:pointer;font-family:inherit;
+      ">✕</button>
+    </div>
+
+    <div id="step-dept">
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:#84968B;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#1C3E2C;color:#FFFFFF;font-size:11px;">1</span>
+        <span>Department নির্বাচন করুন</span>
+      </div>
+      <div id="dept-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;"></div>
+    </div>
+
+    <div id="step-sem" style="display:none;">
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:#84968B;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#1C3E2C;color:#FFFFFF;font-size:11px;">2</span>
+        <span>Semester নির্বাচন করুন</span>
+      </div>
+      <div id="sem-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+  `;
+
+  modal.querySelector("[data-close]").onclick = close;
+
+  const deptList = modal.querySelector("#dept-list");
+
+  function renderDepartments() {
+    deptList.innerHTML = departments.map((d) => `
+      <button class="dept-opt" data-dept-id="${d.id}" style="
+        display:flex;align-items:center;gap:12px;padding:14px;
+        background:${d.id === currentDeptId ? "#DCFCE7" : "#F8FBF8"};
+        border:1.5px solid ${d.id === currentDeptId ? "#10B981" : "#E1E8E1"};
+        border-radius:14px;cursor:pointer;font-family:inherit;
+        text-align:left;width:100%;
+      ">
+        <div style="width:44px;height:44px;border-radius:13px;background:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">${d.icon || "🏛️"}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13.5px;font-weight:800;color:#1C3E2C;letter-spacing:-0.2px;margin-bottom:2px;">${escapeHtml(d.name)}</div>
+          ${d.banglaName ? `<div style="font-size:11px;color:#84968B;font-weight:600;">${escapeHtml(d.banglaName)}</div>` : ""}
+        </div>
+        ${d.id === currentDeptId ? `<span style="color:#10B981;font-size:16px;font-weight:900;">✓</span>` : ""}
+      </button>
+    `).join("");
+
+    deptList.querySelectorAll(".dept-opt").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const deptId = btn.getAttribute("data-dept-id");
+        loadSemesters(deptId);
+      });
+    });
+  }
+
+  async function loadSemesters(deptId) {
+    const stepSem = modal.querySelector("#step-sem");
+    const semList = modal.querySelector("#sem-list");
+
+    deptList.querySelectorAll(".dept-opt").forEach((btn) => {
+      const isThis = btn.getAttribute("data-dept-id") === deptId;
+      btn.style.background = isThis ? "#DCFCE7" : "#F8FBF8";
+      btn.style.borderColor = isThis ? "#10B981" : "#E1E8E1";
+    });
+
+    stepSem.style.display = "block";
+    semList.innerHTML = `<div style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></div>`;
+
+    let semesters = [];
+    try { semesters = await getSemestersByDepartment(deptId); } catch (e) {}
+
+    if (semesters.length === 0) {
+      semList.innerHTML = `
+        <div style="padding:24px 16px;text-align:center;background:#FEF3C7;border:1.5px dashed #FCD34D;border-radius:14px;">
+          <div style="font-size:36px;margin-bottom:8px;">📅</div>
+          <div style="font-size:13px;font-weight:800;color:#92400E;margin-bottom:4px;">কোনো Semester নেই</div>
+        </div>
+      `;
+      return;
+    }
+
+    semList.innerHTML = semesters.map((s) => `
+      <button class="sem-opt" data-sem-id="${s.id}" data-sem-num="${s.number}" style="
+        display:flex;align-items:center;gap:12px;padding:14px;
+        background:${s.id === currentSemId ? "#DCFCE7" : "#F8FBF8"};
+        border:1.5px solid ${s.id === currentSemId ? "#10B981" : "#E1E8E1"};
+        border-radius:14px;cursor:pointer;font-family:inherit;
+        text-align:left;width:100%;
+      ">
+        <div style="width:44px;height:44px;border-radius:13px;background:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">${s.icon || "📅"}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13.5px;font-weight:800;color:#1C3E2C;letter-spacing:-0.2px;margin-bottom:2px;">${escapeHtml(s.name)}</div>
+          <div style="font-size:11px;color:#84968B;font-weight:600;">Semester ${s.number}</div>
+        </div>
+        ${s.id === currentSemId ? `<span style="color:#10B981;font-size:16px;font-weight:900;">✓</span>` : ""}
+      </button>
+    `).join("");
+
+    semList.querySelectorAll(".sem-opt").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const semId = btn.getAttribute("data-sem-id");
+        const semNum = parseInt(btn.getAttribute("data-sem-num"), 10);
+
+        const ns = storage.get(STORAGE_KEYS.SETTINGS, {});
+        ns.department = deptId;
+        ns.departmentId = deptId;
+        ns.semester = semId;
+        ns.semesterId = semId;
+        ns.semesterNumber = semNum;
+        storage.set(STORAGE_KEYS.SETTINGS, ns);
+
+        Toast.success("✅ Selection saved");
+        close();
+        setTimeout(() => window.location.reload(), 300);
+      });
+    });
+
+    setTimeout(() => stepSem.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+  }
+
+  renderDepartments();
+  if (currentDeptId) loadSemesters(currentDeptId);
+}
+
+// ═══════════════════════════════════════════
+// MAIN RENDER
 // ═══════════════════════════════════════════
 export async function renderHome() {
+  // Cleanup previous listeners
+  if (currentCleanup) {
+    try { currentCleanup(); } catch (e) {}
+    currentCleanup = null;
+  }
+
   AppShell.updateHeader({ showBack: false, showSettings: true, showSearch: true });
 
   const main = AppShell.getMainView();
   if (!main) return;
 
-  main.innerHTML = `
-    <div style="text-align:center;padding:60px 20px;">
-      <div class="spinner"></div>
-    </div>
-  `;
+  // ═══ Show skeleton (not spinner!) ═══
+  main.innerHTML = homeSkeleton();
 
-  // Load
-  let departments = [];
-  let subjects = [];
-  let notices = [];
+  // ═══ Offline check ═══
+  if (!isOnline()) {
+    main.innerHTML = errorState({
+      type: "network",
+      customBangla: "Internet connection নেই। Data load করা যাবে না।",
+      retryFn: () => renderHome()
+    });
+    return;
+  }
 
-  try { departments = await getDepartments(); } catch (e) {}
-  try { subjects = await getSubjects(); } catch (e) {}
-  try { notices = await getNotices(); } catch (e) {}
+  // ═══ Load data with error handling ═══
+  let departments = [], subjects = [], notices = [];
+  let loadError = null;
 
+  try {
+    const results = await Promise.all([
+      getDepartments().catch((e) => { loadError = e; return []; }),
+      getSubjects().catch((e) => { loadError = e; return []; }),
+      getNotices().catch((e) => { loadError = e; return []; })
+    ]);
+    [departments, subjects, notices] = results;
+  } catch (err) {
+    loadError = err;
+  }
+
+  // If everything failed
+  if (departments.length === 0 && subjects.length === 0 && notices.length === 0 && loadError) {
+    main.innerHTML = errorState({
+      type: "server",
+      message: loadError.message,
+      retryFn: () => renderHome()
+    });
+    return;
+  }
+
+  // If no departments
+  if (departments.length === 0) {
+    main.innerHTML = emptyState({
+      icon: "🏛️",
+      title: "কোনো Department নেই",
+      message: "Admin Panel থেকে department যোগ করুন।",
+      actionFn: () => window.location.reload(),
+      actionLabel: "🔄 আবার চেষ্টা করুন"
+    });
+    return;
+  }
+
+  // ═══ Prepare data ═══
   const settings = storage.get(STORAGE_KEYS.SETTINGS, {});
   const userName = settings.userName || "Student";
 
@@ -413,31 +363,16 @@ export async function renderHome() {
       (d.code && d.code.toLowerCase() === String(curDeptKey).toLowerCase())
     );
   }
-  if (!currentDept && departments.length > 0) {
+  if (!currentDept) {
     currentDept = departments[0];
     settings.department = currentDept.id;
     settings.departmentId = currentDept.id;
     storage.set(STORAGE_KEYS.SETTINGS, settings);
   }
 
-  if (!currentDept) {
-    main.innerHTML = `
-      <div style="text-align:center;padding:80px 20px;">
-        <div style="font-size:64px;margin-bottom:16px;">🏛️</div>
-        <h2 style="font-size:18px;font-weight:800;color:#1C3E2C;margin:0 0 8px;">No Departments</h2>
-        <p style="font-size:13px;color:#84968B;line-height:1.6;">Admin Panel থেকে department যোগ করুন।</p>
-      </div>
-    `;
-    return;
-  }
-
-  // ═══ Load semesters for CURRENT department from server ═══
   let currentSemesters = [];
-  try {
-    currentSemesters = await getSemestersByDepartment(currentDept.id);
-  } catch (e) {}
+  try { currentSemesters = await getSemestersByDepartment(currentDept.id); } catch (e) {}
 
-  // Current semester from storage — validate against server data
   let currentSem = null;
   const curSemKey = settings.semesterId || settings.semester || "";
   if (curSemKey) {
@@ -454,7 +389,6 @@ export async function renderHome() {
   }
 
   const currentSemName = currentSem ? currentSem.name : "No Semester";
-
   const streak = updateStreak();
   const goal = getStudyProgress();
   const goalPercent = Math.min(Math.round((goal.minutes / goal.target) * 100), 100);
@@ -469,9 +403,7 @@ export async function renderHome() {
   const latestNotice = notices.length > 0 ? notices[0] : null;
   const firstSubject = subjects.length > 0 ? subjects[0] : null;
 
-  // ═══════════════════════════════════════════
-  // RENDER
-  // ═══════════════════════════════════════════
+  // ═══ RENDER CONTENT ═══
   main.innerHTML = `
     <!-- HERO -->
     <div style="
@@ -573,28 +505,6 @@ export async function renderHome() {
       </button>
     ` : ""}
 
-    <!-- QUIZ -->
-    <div style="display:flex;justify-content:space-between;margin:0 0 12px;">
-      <h2 style="font-size:15px;font-weight:800;color:#1C3E2C;margin:0;">Today's Quiz Challenge</h2>
-      <span style="font-size:10px;font-weight:800;color:#92400E;background:#FEF3C7;padding:4px 10px;border-radius:999px;">Daily Set</span>
-    </div>
-
-    <div style="padding:18px;background:linear-gradient(135deg, #FFFFFF, #F8FBF8);border:1.5px solid #E1E8E1;border-radius:18px;box-shadow:0 4px 14px rgba(28,62,44,0.06);margin-bottom:24px;">
-      <div style="display:flex;gap:6px;margin-bottom:12px;">
-        <span style="font-size:10px;font-weight:800;color:#1C3E2C;background:#E8EFE8;padding:4px 10px;border-radius:6px;">${escapeHtml(firstSubject ? firstSubject.name : "Basic")}</span>
-        <span style="font-size:10px;font-weight:800;color:#92400E;background:#FEF3C7;padding:4px 10px;border-radius:6px;">Mixed</span>
-      </div>
-      <h3 style="font-size:16px;font-weight:900;color:#1C3E2C;margin:0 0 10px;">Daily Engineering Challenge</h3>
-      <div style="display:flex;gap:16px;margin-bottom:16px;font-size:11.5px;color:#57675D;font-weight:600;">
-        <span>⏱️ 5 mins</span>
-        <span>📋 5 MCQs</span>
-      </div>
-      <button id="home-start-quiz" style="width:100%;padding:14px;background:linear-gradient(135deg,#1C3E2C,#2A5540);color:#FFFFFF;border:none;border-radius:14px;font-size:14px;font-weight:800;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-        <span>Start Practice Test</span>
-      </button>
-    </div>
-
     <!-- LATEST NOTICE -->
     ${latestNotice ? `
       <div style="display:flex;justify-content:space-between;margin:0 0 12px;">
@@ -617,12 +527,12 @@ export async function renderHome() {
     <div style="height:20px;"></div>
   `;
 
-  // ═══ BIND ═══
+  // ═══════════════════════════════════════════
+  // BIND EVENTS
+  // ═══════════════════════════════════════════
 
-  // ⭐ BOTH department AND semester pill open the SAME combined picker
-  const openPicker = () => {
-    showDeptSemPicker(currentDept.id, currentSem?.id || null);
-  };
+  const openPicker = () => showDeptSemPicker(currentDept.id, currentSem?.id || null);
+
   main.querySelector("#hero-dept-btn")?.addEventListener("click", openPicker);
   main.querySelector("#hero-sem-btn")?.addEventListener("click", openPicker);
 
@@ -658,10 +568,6 @@ export async function renderHome() {
     });
   });
 
-  main.querySelector("#home-start-quiz")?.addEventListener("click", () => {
-    showInlineModal("Quiz Practice", "Daily quiz শীঘ্রই আসছে।");
-  });
-
   main.querySelector("#home-notice-card")?.addEventListener("click", (e) => {
     e.preventDefault();
     window.location.hash = "#/notices";
@@ -670,10 +576,32 @@ export async function renderHome() {
     e.preventDefault();
     window.location.hash = "#/notices";
   });
+
+  // ═══ Pull to Refresh ═══
+  const cleanupPull = attachPullToRefresh(main, async () => {
+    Toast.info("🔄 Refreshing...");
+    await renderHome();
+    Toast.success("✅ Updated");
+  });
+
+  // ═══ Connection monitoring ═══
+  const cleanupConn = onConnectionChange((online) => {
+    if (!online) {
+      Toast.warning("📡 Internet নেই");
+    } else {
+      Toast.success("✅ Internet ফিরে এসেছে");
+    }
+  });
+
+  // ═══ Save cleanup ═══
+  currentCleanup = () => {
+    try { cleanupPull && cleanupPull(); } catch (e) {}
+    try { cleanupConn && cleanupConn(); } catch (e) {}
+  };
 }
 
 // ═══════════════════════════════════════════
-// QUICK BUTTON HELPER
+// HELPERS
 // ═══════════════════════════════════════════
 function quickBtn(icon, label, bg, color, route, locked = false) {
   return `
@@ -690,9 +618,6 @@ function quickBtn(icon, label, bg, color, route, locked = false) {
   `;
 }
 
-// ═══════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════
 function escapeHtml(str) {
   if (str == null) return "";
   return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
