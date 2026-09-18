@@ -314,12 +314,12 @@ export async function renderSubjectDetail(params = {}) {
                         grid-template-columns:repeat(3,1fr);
                         gap:6px;
                       ">
-                        ${contentBtn("pdf", "📄", "PDF", "rose", ch, subjectId)}
-                        ${contentBtn("creative", "📝", "রচনামূলক", "forest", ch, subjectId)}
-                        ${contentBtn("short", "📄", "সংক্ষিপ্ত", "accent", ch, subjectId)}
-                        ${contentBtn("mcq", "⚡", "MCQ", "indigo", ch, subjectId)}
-                        ${contentBtn("suggestion", "💡", "সাজেশন", "purple", ch, subjectId)}
-                        ${contentBtn("formula", "🧮", "সূত্রাবলী", "cyan", ch, subjectId)}
+                        ${contentBtn("pdf", "📄", "PDF", "pdf", ch, subjectId)}
+                        ${contentBtn("creative", "📝", "রচনামূলক", "creative", ch, subjectId)}
+                        ${contentBtn("short", "📄", "সংক্ষিপ্ত", "short", ch, subjectId)}
+                        ${contentBtn("mcq", "⚡", "MCQ", "mcq", ch, subjectId)}
+                        ${contentBtn("suggestion", "💡", "সাজেশন", "suggestion", ch, subjectId)}
+                        ${contentBtn("formula", "🧮", "সূত্রাবলী", "formula", ch, subjectId)}
                       </div>
                     </div>
                   </div>
@@ -365,8 +365,9 @@ export async function renderSubjectDetail(params = {}) {
         if (b !== body) {
           b.style.maxHeight = "0";
           const otherItem = b.closest(".chapter-item");
-          otherItem?.querySelector(".chevron")?.style.setProperty("transform", "");
-          otherItem?.style.setProperty("border-color", "#E1E8E1");
+          const otherChevron = otherItem?.querySelector(".chevron");
+          if (otherChevron) otherChevron.style.transform = "";
+          if (otherItem) otherItem.style.borderColor = "#E1E8E1";
         }
       });
 
@@ -401,18 +402,30 @@ export async function renderSubjectDetail(params = {}) {
 }
 
 // ═══════════════════════════════════════════
-// CONTENT BUTTON HELPER
+// CONTENT BUTTON HELPER (FIXED — all color aliases included)
 // ═══════════════════════════════════════════
 function contentBtn(type, icon, label, colorSet, chapter, subjectId) {
   const colors = {
     pdf:        { bg: "#FEE2E2", fg: "#991B1B" },
+    rose:       { bg: "#FEE2E2", fg: "#991B1B" },
+
     creative:   { bg: "#DCFCE7", fg: "#065F46" },
+    forest:     { bg: "#DCFCE7", fg: "#065F46" },
+
     short:      { bg: "#FEF3C7", fg: "#92400E" },
+    accent:     { bg: "#FEF3C7", fg: "#92400E" },
+
     mcq:        { bg: "#E0E7FF", fg: "#3730A3" },
+    indigo:     { bg: "#E0E7FF", fg: "#3730A3" },
+
     suggestion: { bg: "#F3E8FF", fg: "#6B21A8" },
-    formula:    { bg: "#CFFAFE", fg: "#155E75" }
+    purple:     { bg: "#F3E8FF", fg: "#6B21A8" },
+
+    formula:    { bg: "#CFFAFE", fg: "#155E75" },
+    cyan:       { bg: "#CFFAFE", fg: "#155E75" }
   };
-  const c = colors[colorSet] || colors.forest;
+
+  const c = colors[colorSet] || colors.pdf;
 
   return `
     <button 

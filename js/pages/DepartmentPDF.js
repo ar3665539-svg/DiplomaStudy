@@ -1,126 +1,245 @@
 /**
- * DiplomaStudy - Department PDF Viewer Page
- * Department select করার পর এই page এ PDF দেখাবে
+ * DiplomaStudy - Department PDFs Page (DB-driven)
+ * Shows PDFs from server, no hardcoded data
  */
 
 import { AppShell } from "../components/AppShell.js";
-import { getDepartmentById } from "../../data/departments.js";
-import { civilSubjects } from "../../data/civilSubjects.js";
-import { showComingSoon } from "../core/comingSoonHelper.js";
-import { EmptyState } from "../components/EmptyState.js";
+import {
+  getDepartments,
+  getSubjectsByAssignment,
+  getPdfsBySubject,
+  getSemestersByDepartment
+} from "../services/api.js";
+import { storage, STORAGE_KEYS } from "../core/storage.js";
 
-export function renderDepartmentPDF(params = {}) {
-  const deptId = params.deptId || "civil";
-  const dept = getDepartmentById(deptId);
-
+export async function renderDepartmentPDF(params = {}) {
   AppShell.updateHeader({
-    title: dept.name,
-    subtitle: dept.banglaName,
-    showBack: true
+    title: "PDFs",
+    subtitle: "Loading...",
+    showBack: true,
+    showSearch: false,
+    showTheme: true,
+    showSettings: false
   });
 
   const main = AppShell.getMainView();
   if (!main) return;
 
-  // Civil হলে subjects এর PDF list, নাহলে empty
-  const hasPdfs = dept.hasPdf && dept.id === "civil";
-  const books = hasPdfs ? civilSubjects : [];
-
   main.innerHTML = `
-    <!-- ═══════════════════════════════════
-         DEPARTMENT HERO
-         ═══════════════════════════════════ -->
-    <div class="dept-pdf-hero" style="border-left-color: ${dept.color};">
-      <div class="dph-icon" style="background: ${dept.color}15; color: ${dept.color};">
-        ${dept.icon}
+    <div style="text-align:center;padding:60px 20px;">
+      <div class="spinner"></div>
+      <p style="margin-top:12px;color:#84968B;font-size:13px;">Loading PDFs...</p>
+    </div>
+  `;
+
+  // ═══ Get params ═══
+  const urlParams = new URLSearchParams(window.location.hash.split("?")[1] || "");
+  const urlDeptId = params.deptId || urlParams.get("deptId") || "";
+
+  const settings = storage.get(STORAGE_KEYS.SETTINGS, {});
+  const deptId = urlDeptId || settings.departmentId || settings.department || "";
+  const semId = settings.semesterId || settings.semester || "";
+
+  if (!deptId) {
+    main.innerHTML = `
+      <div style="text-align:center;padding:60px 20px;">
+        <div style="font-size:56px;margin-bottom:16px;">🏛️</div>
+        <h2 style="font-size:17px;font-weight:800;color:#1C3E2C;margin:0 0 8px;">Department নেই</h2>
+        <button id="goto-home" style="margin-top:12px;padding:12px 20px;border-radius:12px;border:none;background:linear-gradient(135deg,#1C3E2C,#2A5540);color:#FFFFFF;font-weight:800;font-size:13.5px;cursor:pointer;font-family:inherit;">
+          🏠 Home এ যান
+        </button>
       </div>
-      <div class="dph-info">
-        <h1 class="dph-name">${dept.name}</h1>
-        <p class="dph-bangla">${dept.banglaName}</p>
-        ${hasPdfs 
-          ? `<span class="dph-count">📚 ${books.length}টি PDF বই</span>`
-          : `<span class="dph-count dph-count-soon">🔒 PDF শীঘ্রই আসছে</span>`
-        }
+    `;
+    main.querySelector("#goto-home")?.addEventListener("click", () => {
+      window.location.hash = "#/home";
+    });
+    return;
+  }
+
+  // ═══ Load data ═══
+  let departments = [];
+  let subjects = [];
+  let semesters = [];
+
+  try { departments = await getDepartments(); } catch (e) {}
+  try { subjects = await getSubjectsByAssignment(deptId, semId || null); } catch (e) {}
+  try { semesters = await getSemestersByDepartment(deptId); } catch (e) {}
+
+  const currentDept = departments.find((d) => d.id === deptId);
+  const currentSem = semesters.find((s) => s.id === semId);
+
+  if (!currentDept) {
+    main.innerHTML = `
+      <div style="text-align:center;padding:60px 20px;">
+        <div style="font-size:56px;margin-bottom:16px;">🏛️</div>
+        <h2 style="font-size:17px;font-weight:800;color:#1C3E2C;margin:0 0 8px;">Department পাওয়া যায়নি</h2>
+      </div>
+    `;
+    return;
+  }
+
+  AppShell.updateHeader({
+    title: "PDFs",
+    subtitle: currentDept.name,
+    showBack: true,
+    showSearch: false,
+    showTheme: true,
+    showSettings: false
+  });
+
+  // ═══ Load PDFs for each subject ═══
+  const subjectPdfs = [];
+  for (const sub of subjects) {
+    try {
+      const pdfs = await getPdfsBySubject(sub.id);
+      if (pdfs.length > 0) {
+        subjectPdfs.push({ subject: sub, pdfs });
+      }
+    } catch (e) {}
+  }
+
+  const totalPdfs = subjectPdfs.reduce((sum, s) => sum + s.pdfs.length, 0);
+
+  // ═══ RENDER ═══
+  main.innerHTML = `
+    <!-- HERO -->
+    <div style="
+      display:flex;align-items:center;gap:14px;
+      padding:18px;
+      background:linear-gradient(135deg, #DCFCE7, #BBF7D0);
+      border:1.5px solid #10B981;
+      border-radius:18px;
+      margin-bottom:18px;
+    ">
+      <div style="
+        width:60px;height:60px;border-radius:16px;
+        background:#FFFFFF;
+        display:flex;align-items:center;justify-content:center;
+        font-size:30px;flex-shrink:0;
+        box-shadow:0 4px 12px rgba(16,185,129,0.15);
+      ">${currentDept.icon || "🏛️"}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:17px;font-weight:900;color:#065F46;letter-spacing:-0.3px;margin-bottom:2px;">
+          ${escapeHtml(currentDept.name)}
+        </div>
+        ${currentSem ? `
+          <div style="font-size:11.5px;color:#047857;font-weight:600;">
+            ${escapeHtml(currentSem.name)} • ${totalPdfs}টি PDF
+          </div>
+        ` : `
+          <div style="font-size:11.5px;color:#047857;font-weight:600;">
+            ${totalPdfs}টি PDF
+          </div>
+        `}
       </div>
     </div>
 
-    <!-- ═══════════════════════════════════
-         PDF LIST OR EMPTY STATE
-         ═══════════════════════════════════ -->
-    ${hasPdfs ? `
-      <div class="compact-section-header">
-        <span class="csh-icon">📄</span>
-        <span class="csh-title">PDF Books (${books.length}টি)</span>
-        <span class="csh-hint">ট্যাপ করুন</span>
-      </div>
-
-      <div class="pdf-books-grid">
-        ${books.map((book, idx) => `
-          <div 
-            class="pdf-book-card" 
-            data-pdf-id="${book.id}"
-            data-pdf-name="${book.name}"
-            role="button"
-            tabindex="0"
-          >
-            <div class="pbc-top">
-              <div class="pbc-icon">${book.icon}</div>
-              <div class="pbc-pdf-badge">PDF</div>
-            </div>
-            <div class="pbc-body">
-              <h3 class="pbc-name">${book.name}</h3>
-              <p class="pbc-bangla">${book.banglaName}</p>
-            </div>
-            <div class="pbc-footer">
-              <span class="pbc-code">${book.code}</span>
-              <span class="pbc-open">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                  <polyline points="9 18 15 12 9 6"></polyline>
-                </svg>
+    <!-- PDF LIST -->
+    ${subjectPdfs.length > 0 ? `
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        ${subjectPdfs.map(({ subject, pdfs }) => `
+          <div>
+            <div style="
+              display:flex;align-items:center;gap:8px;
+              padding:10px 12px;
+              background:linear-gradient(135deg, rgba(28,62,44,0.06), transparent);
+              border-left:3px solid #1C3E2C;
+              border-radius:10px;
+              margin-bottom:10px;
+            ">
+              <span style="font-size:18px;">${subject.icon || "📘"}</span>
+              <span style="font-size:13px;font-weight:800;color:#1C3E2C;flex:1;">
+                ${escapeHtml(subject.name)}
               </span>
+              <span style="
+                font-size:10.5px;font-weight:800;color:#991B1B;
+                background:#FEE2E2;padding:2px 8px;border-radius:999px;
+              ">${pdfs.length}</span>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              ${pdfs.map((pdf) => `
+                <a 
+                  href="${pdf.fileUrl || '#'}"
+                  target="_blank"
+                  rel="noopener"
+                  ${pdf.fileUrl ? "" : `onclick="event.preventDefault(); alert('File নেই');"`}
+                  style="
+                    display:flex;align-items:center;gap:12px;
+                    padding:14px;
+                    background:#FFFFFF;
+                    border:1px solid #E1E8E1;
+                    border-radius:14px;
+                    text-decoration:none;
+                    cursor:pointer;
+                    box-shadow:0 2px 6px rgba(28,62,44,0.04);
+                    transition:all 0.15s ease;
+                  "
+                >
+                  <div style="
+                    width:46px;height:46px;border-radius:13px;
+                    background:linear-gradient(135deg,#FEE2E2,#FECACA);
+                    color:#991B1B;
+                    display:flex;align-items:center;justify-content:center;
+                    font-size:22px;flex-shrink:0;
+                  ">📄</div>
+
+                  <div style="flex:1;min-width:0;">
+                    <div style="
+                      font-size:13.5px;font-weight:800;color:#1C3E2C;
+                      letter-spacing:-0.2px;line-height:1.3;margin-bottom:3px;
+                      overflow:hidden;text-overflow:ellipsis;
+                      display:-webkit-box;-webkit-line-clamp:2;
+                      -webkit-box-orient:vertical;
+                    ">${escapeHtml(pdf.title || "Untitled")}</div>
+
+                    ${pdf.fileName ? `
+                      <div style="
+                        font-size:11px;color:#84968B;font-weight:600;
+                        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+                      ">${escapeHtml(pdf.fileName)} ${pdf.fileSize ? `• ${pdf.fileSize}` : ""}</div>
+                    ` : ""}
+                  </div>
+
+                  <div style="
+                    width:32px;height:32px;border-radius:50%;
+                    background:#DCFCE7;color:#065F46;
+                    display:flex;align-items:center;justify-content:center;
+                    flex-shrink:0;
+                  ">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                      <path d="M7 17l10-10M7 7h10v10"/>
+                    </svg>
+                  </div>
+                </a>
+              `).join("")}
             </div>
           </div>
         `).join("")}
       </div>
-
-      <div class="info-box-civil mt-md">
-        <div class="info-icon">💡</div>
-        <div>
-          <p class="info-text">PDF শীঘ্রই server থেকে যুক্ত হবে</p>
-          <p class="info-sub">প্রতিটা বই tap করলে PDF viewer খুলবে যেখানে পড়তে পারবেন।</p>
-        </div>
-      </div>
     ` : `
-      <div class="dept-empty-pdf">
-        <div class="dep-icon">📄</div>
-        <h3 class="dep-title">PDF এখনো আসেনি</h3>
-        <p class="dep-bangla">
-          <strong>${dept.banglaName}</strong> এর বইয়ের PDF শীঘ্রই server থেকে যুক্ত করা হবে।
+      <div style="
+        text-align:center;padding:48px 24px;
+        background:#FFFFFF;
+        border:1.5px dashed #E1E8E1;
+        border-radius:20px;
+        margin-bottom:20px;
+      ">
+        <div style="font-size:64px;margin-bottom:12px;">📄</div>
+        <h3 style="font-size:16px;font-weight:800;color:#1C3E2C;margin:0 0 8px;">কোনো PDF নেই</h3>
+        <p style="font-size:12.5px;color:#84968B;line-height:1.6;max-width:280px;margin:0 auto;">
+          ${escapeHtml(currentDept.banglaName || currentDept.name)} এর বইয়ের PDF শীঘ্রই যুক্ত করা হবে।
         </p>
-        <div class="dep-features">
-          <span class="dep-chip">📄 PDF Books</span>
-          <span class="dep-chip">📚 All Subjects</span>
-          <span class="dep-chip">🔒 Coming Soon</span>
-        </div>
       </div>
     `}
 
-    <!-- Bottom spacing -->
-    <div style="height: 20px;"></div>
+    <div style="height:20px;"></div>
   `;
+}
 
-  // Bind PDF book clicks → show coming soon
-  main.querySelectorAll(".pdf-book-card").forEach((card) => {
-    const handle = () => {
-      const name = card.getAttribute("data-pdf-name");
-      showComingSoon(`📄 ${name} PDF`);
-    };
-    card.addEventListener("click", handle);
-    card.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        handle();
-      }
-    });
-  });
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
