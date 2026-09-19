@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    
+
     <!-- ═══════════════════════════════════════
          GLOBAL: Prevent browser pull-to-refresh
          (Home page has its own custom pull-to-refresh)
@@ -14,36 +14,38 @@
         overscroll-behavior-x: none;
       }
     </style>
-    
+
     <title>DiplomaStudy — Learn Smart</title>
-    
+
     <meta name="description" content="DiplomaStudy - Diploma in Engineering study app for BTEB students in Bangladesh." />
     <meta name="author" content="DiplomaStudy" />
     <meta name="keywords" content="Diploma, BTEB, Engineering, Bangladesh, Polytechnic" />
-    
+
     <!-- Open Graph -->
     <meta property="og:title" content="DiplomaStudy" />
     <meta property="og:description" content="Diploma Engineering study app for BTEB students." />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="bn_BD" />
-    
+
     <!-- Theme -->
     <meta name="theme-color" content="#1C3E2C" />
-    
+
     <!-- Mobile & PWA -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="DiplomaStudy" />
     <meta name="format-detection" content="telephone=no" />
-    
+
     <!-- PWA Manifest -->
     <link rel="manifest" href="./manifest.json" />
-    
+
     <!-- Icons -->
     <link rel="icon" type="image/svg+xml" href="./assets/icons/icon.svg" />
-    <link rel="apple-touch-icon" href="./assets/icons/icon-192.png" />
-    
+    <link rel="apple-touch-icon" href="./assets/icons/icon.svg" />
+    <link rel="apple-touch-icon" sizes="192x192" href="./assets/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="./assets/icons/icon-512.png" />
+
     <!-- ═══════════════════════════════════════
          STYLESHEETS — LAYOUT MUST BE LAST
          ═══════════════════════════════════════ -->
@@ -59,7 +61,7 @@
     <!-- ⬇️⬇️⬇️ layout.css MUST BE LAST ⬇️⬇️⬇️ -->
     <link rel="stylesheet" href="./css/layout.css" />
   </head>
-  
+
   <body>
     <!-- App Mount Point -->
     <div id="app">
@@ -70,10 +72,10 @@
         <p class="initial-loader-sub">Loading...</p>
       </div>
     </div>
-    
+
     <!-- Toast Container -->
     <div id="toast-container"></div>
-    
+
     <!-- ═══════════════════════════════════════
          GLOBAL ERROR HANDLER — shows errors on screen
          ═══════════════════════════════════════ -->
@@ -85,7 +87,7 @@
           if (errorShown) return;
           errorShown = true;
 
-          document.body.innerHTML = 
+          document.body.innerHTML =
             '<div style="padding:20px;font-family:monospace;font-size:13px;background:#FEF3C7;color:#78350F;min-height:100vh;overflow:auto;">' +
               '<h2 style="color:#92400E;font-size:16px;margin:0 0 12px;">⚠️ ' + title + '</h2>' +
               '<p style="font-weight:700;margin:0 0 8px;word-break:break-word;">' + message + '</p>' +
@@ -122,10 +124,10 @@
         }, 8000);
       })();
     </script>
-    
+
     <!-- Main Entry Point -->
     <script type="module" src="./js/main.js"></script>
-    
+
     <!-- Inline styles for initial loader -->
     <style>
       .initial-loader {
@@ -137,7 +139,7 @@
         padding: 40px 20px;
         text-align: center;
       }
-      
+
       .initial-loader-logo {
         width: 60px;
         height: 60px;
@@ -153,7 +155,7 @@
         margin-bottom: 20px;
         box-shadow: 0 8px 20px rgba(28, 62, 44, 0.2);
       }
-      
+
       .initial-loader-text {
         font-size: 16px;
         font-weight: 700;
@@ -161,13 +163,13 @@
         margin-top: 16px;
         margin-bottom: 4px;
       }
-      
+
       .initial-loader-sub {
         font-size: 12px;
         color: #84968B;
         font-weight: 500;
       }
-      
+
       .spinner {
         width: 32px;
         height: 32px;
@@ -176,7 +178,7 @@
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
       }
-      
+
       @keyframes spin {
         to { transform: rotate(360deg); }
       }

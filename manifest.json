@@ -6,11 +6,26 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait-primary",
   "theme_color": "#1C3E2C",
   "background_color": "#F7F5EF",
   "categories": ["education", "productivity", "utilities"],
+  "lang": "bn",
+  "dir": "ltr",
   "icons": [
+    {
+      "src": "/assets/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
     {
       "src": "/assets/icons/icon-192.png",
       "sizes": "192x192",
@@ -28,6 +43,26 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Subjects",
+      "short_name": "Subjects",
+      "url": "/#/subjects",
+      "icons": [{ "src": "/assets/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Quiz",
+      "short_name": "Quiz",
+      "url": "/#/quiz",
+      "icons": [{ "src": "/assets/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Notices",
+      "short_name": "Notices",
+      "url": "/#/notices",
+      "icons": [{ "src": "/assets/icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
     }
   ]
 }

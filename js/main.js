@@ -1,9 +1,9 @@
 /**
- * DiplomaStudy - Main Bootstrap v10
- * Adds prefetch on boot
+ * DiplomaStudy - Main Bootstrap v11
+ * PWA install support + prefetch on boot
  */
 
-console.log("[Main] v10 starting...");
+console.log("[Main] v11 starting...");
 
 function showBootError(stage, err) {
   var msg = (err && err.message) ? err.message : String(err);
@@ -190,20 +190,47 @@ async function boot() {
     console.log("[Main] Prefetch started");
   }
 
-  // Service worker - KILL SWITCH
+  // ═══════════════════════════════════════════
+  // SERVICE WORKER — install support (no cache)
+  // ═══════════════════════════════════════════
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.getRegistrations().then(function (regs) {
-      for (var i = 0; i < regs.length; i++) {
-        regs[i].unregister();
-      }
-    }).catch(function (e) {});
+    navigator.serviceWorker.register("./sw.js", { scope: "./" })
+      .then(function (reg) {
+        console.log("[SW] Registered:", reg.scope);
+      })
+      .catch(function (err) {
+        console.warn("[SW] Registration failed:", err);
+      });
   }
+
+  // Clean up any old caches from previous versions
   if (window.caches && caches.keys) {
     caches.keys().then(function (keys) {
       return Promise.all(keys.map(function (k) { return caches.delete(k); }));
     }).catch(function (e) {});
   }
 
+  // ═══════════════════════════════════════════
+  // PWA — Capture install prompt event
+  // ═══════════════════════════════════════════
+  window.addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault();
+    window.deferredInstallPrompt = e;
+    console.log("[PWA] Install prompt available");
+  });
+
+  window.addEventListener("appinstalled", function () {
+    console.log("[PWA] App installed successfully");
+    window.deferredInstallPrompt = null;
+    // Optional: show a friendly toast if Toast is available
+    try {
+      if (typeof window.showToast === "function") {
+        window.showToast("App installed! Find it on your home screen.", "success");
+      }
+    } catch (err) {}
+  });
+
+  // Realtime (optional)
   try {
     var realtimeMod = await safeImport("./core/realtime.js", "realtime");
     if (realtimeMod && realtimeMod.initRealtime) {

@@ -1,5 +1,5 @@
 /**
- * Settings v5 - Improved Share App
+ * Settings v6 - Full featured with Install App
  */
 
 import { AppShell } from "../components/AppShell.js";
@@ -16,7 +16,7 @@ var STUDY_TIME_KEY = "diplomastudy_study_time";
 var LANG_KEY = "diplomastudy_language";
 var WEEK_START_KEY = "diplomastudy_week_start";
 var NOTIF_KEY = "diplomastudy_notifications";
-var APP_VERSION = "2.3.0";
+var APP_VERSION = "2.4.0";
 var SHARE_URL = "https://diplomastudy.pages.dev";
 var SHARE_TEXT = "Diploma Engineering students-\u09A6\u09C7\u09B0 \u099C\u09A8\u09CD\u09AF \u09B8\u09C7\u09B0\u09BE study app! \u09AC\u09BF\u09B7\u09AF\u09BC, PDF, \u09B8\u09BE\u099C\u09C7\u09B6\u09A8, \u09B8\u09C2\u09A4\u09CD\u09B0 \u09B8\u09AC \u098F\u0995\u099C\u09BE\u09AF\u09BC\u0997\u09BE\u09AF\u09BC\u0964";
 
@@ -90,6 +90,14 @@ function getCacheSizeKB() {
   } catch (e) { return 0; }
 }
 
+function isInstalled() {
+  try {
+    if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) return true;
+    if (window.navigator.standalone === true) return true;
+  } catch (e) {}
+  return false;
+}
+
 function escapeHtml(s) {
   if (s == null) return "";
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -107,7 +115,7 @@ var Toast = {
       el.style.cssText =
         "position:fixed;left:50%;bottom:90px;transform:translateX(-50%);" +
         "background:" + bg + ";color:#FFFFFF;padding:11px 18px;border-radius:12px;" +
-        "font-size:13px;font-weight:700;font-family:inherit;z-index:9999;" +
+        "font-size:13px;font-weight:700;font-family:inherit;z-index:99999;" +
         "box-shadow:0 8px 24px rgba(0,0,0,0.25);opacity:0;transition:opacity 0.2s;max-width:85%;text-align:center;";
       document.body.appendChild(el);
       requestAnimationFrame(function () { el.style.opacity = "1"; });
@@ -161,7 +169,7 @@ function rowBtn(id, emoji, bg, title, sub, trailing, extraStyle) {
 }
 
 // ═══════════════════════════════════════════
-// SHARE MODAL (fallback when native share not available)
+// SHARE MODAL
 // ═══════════════════════════════════════════
 function showShareModal() {
   var old = document.getElementById("ds-share-modal");
@@ -208,9 +216,7 @@ function showShareModal() {
   overlay.addEventListener("click", function (e) { if (e.target === overlay) close(); });
 
   overlay.querySelectorAll("a").forEach(function (a) {
-    a.addEventListener("click", function () {
-      setTimeout(close, 400);
-    });
+    a.addEventListener("click", function () { setTimeout(close, 400); });
   });
 
   overlay.querySelector("[data-copy]").onclick = function () {
@@ -239,11 +245,7 @@ function fallbackCopy(text) {
   } catch (e) {}
 }
 
-// ═══════════════════════════════════════════
-// SHARE HANDLER
-// ═══════════════════════════════════════════
 function doShare() {
-  // 1. Try native share (opens Android share sheet with ALL apps)
   if (navigator.share) {
     try {
       var p = navigator.share({
@@ -251,25 +253,93 @@ function doShare() {
         text: SHARE_TEXT,
         url: SHARE_URL
       });
-      // If it's a promise, catch errors
       if (p && typeof p.then === "function") {
-        p.then(function () {
-          // user shared successfully — no toast needed
-        }).catch(function (err) {
-          // AbortError = user cancelled (do nothing)
-          // NotAllowedError = not from user gesture (fallback)
-          // any other = fallback
+        p.then(function () {}).catch(function (err) {
           if (err && (err.name === "AbortError" || err.name === "NotAllowedError")) return;
           showShareModal();
         });
       }
       return;
-    } catch (e) {
-      // fall through
-    }
+    } catch (e) {}
   }
-  // 2. Fallback: our own share sheet
   showShareModal();
+}
+
+// ═══════════════════════════════════════════
+// INSTALL APP
+// ═══════════════════════════════════════════
+function doInstall() {
+  // Already installed?
+  if (isInstalled()) {
+    Toast.info("App already installed");
+    return;
+  }
+  // Try native prompt (Android Chrome)
+  if (window.deferredInstallPrompt) {
+    try {
+      window.deferredInstallPrompt.prompt();
+      window.deferredInstallPrompt.userChoice.then(function (choice) {
+        if (choice.outcome === "accepted") {
+          Toast.success("Installing...");
+        }
+        window.deferredInstallPrompt = null;
+      }).catch(function () {
+        window.deferredInstallPrompt = null;
+      });
+      return;
+    } catch (e) {}
+  }
+  // Manual instructions
+  var ua = navigator.userAgent || "";
+  var isIOS = /iPad|iPhone|iPod/.test(ua) || (ua.indexOf("Mac") !== -1 && "ontouchend" in document);
+  var isAndroid = /Android/.test(ua);
+
+  var title = "Install DiplomaStudy";
+  var steps = [];
+
+  if (isIOS) {
+    steps = [
+      "1. Tap the Share icon below the page",
+      "2. Scroll down and tap 'Add to Home Screen'",
+      "3. Tap 'Add' at the top"
+    ];
+  } else if (isAndroid) {
+    steps = [
+      "1. Tap the 3-dot menu (top-right)",
+      "2. Tap 'Install app' or 'Add to Home screen'",
+      "3. Tap 'Install'"
+    ];
+  } else {
+    steps = [
+      "1. Look for the install icon in the address bar",
+      "2. Or use the browser menu to add to home screen"
+    ];
+  }
+
+  var old = document.getElementById("ds-install-modal");
+  if (old) old.remove();
+  var overlay = document.createElement("div");
+  overlay.id = "ds-install-modal";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(15,23,42,0.75);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;";
+  overlay.innerHTML =
+    '<div style="background:#FFFFFF;border-radius:22px;padding:24px;max-width:360px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,0.35);">' +
+      '<div style="text-align:center;margin-bottom:20px;">' +
+        '<div style="width:64px;height:64px;border-radius:20px;background:linear-gradient(135deg,#1C3E2C,#2A5540);color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;margin:0 auto 12px;">DS</div>' +
+        '<div style="font-size:16px;font-weight:900;color:#1C3E2C;margin-bottom:4px;">' + title + '</div>' +
+        '<div style="font-size:12px;color:#84968B;font-weight:600;">Add to home screen for fullscreen mode</div>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">' +
+        steps.map(function (st) {
+          return '<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:#F8FBF8;border-radius:12px;font-size:13px;color:#1C3E2C;font-weight:600;line-height:1.5;">' + st + '</div>';
+        }).join("") +
+      '</div>' +
+      '<button data-close type="button" style="width:100%;padding:14px;border-radius:14px;border:none;background:linear-gradient(135deg,#1C3E2C,#2A5540);color:#FFFFFF;font-weight:800;font-size:14px;font-family:inherit;cursor:pointer;">Got it</button>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+  var close = function () { overlay.remove(); };
+  overlay.querySelector("[data-close]").onclick = close;
+  overlay.addEventListener("click", function (e) { if (e.target === overlay) close(); });
 }
 
 // ═══════════════════════════════════════════
@@ -300,11 +370,42 @@ export function renderSettings() {
   var weekStart = getWeekStart();
   var notif = getNotif();
   var cacheKB = getCacheSizeKB();
+  var installed = isInstalled();
 
   var deptName = settings.departmentName || settings.department || "No department";
 
+  // Install section — different UI based on state
+  var installSectionHtml = "";
+  if (!installed) {
+    installSectionHtml =
+      '<div style="margin-bottom:20px;">' +
+        sectionTitle("Install App") +
+        '<button id="setting-install" type="button" style="width:100%;display:flex;align-items:center;gap:14px;padding:16px;background:linear-gradient(135deg,#DCFCE7,#BBF7D0);border:1px solid #10B981;border-radius:18px;cursor:pointer;font-family:inherit;text-align:left;">' +
+          '<div style="width:42px;height:42px;border-radius:13px;background:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">\uD83D\uDCF1</div>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-size:13.5px;font-weight:800;color:#065F46;margin-bottom:2px;">Install DiplomaStudy</div>' +
+            '<div style="font-size:11px;color:#065F46;font-weight:600;opacity:0.85;">Add to home screen for fullscreen mode</div>' +
+          '</div>' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#065F46" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>' +
+        '</button>' +
+      '</div>';
+  } else {
+    installSectionHtml =
+      '<div style="margin-bottom:20px;">' +
+        sectionTitle("Install App") +
+        '<div style="display:flex;align-items:center;gap:14px;padding:16px;background:#F8FBF8;border:1px solid #E1E8E1;border-radius:18px;">' +
+          '<div style="width:42px;height:42px;border-radius:13px;background:#DCFCE7;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">\u2705</div>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-size:13.5px;font-weight:800;color:#1C3E2C;margin-bottom:2px;">App Installed</div>' +
+            '<div style="font-size:11px;color:#84968B;font-weight:600;">You are using the installed version</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+  }
+
   main.innerHTML =
 
+    // ── PROFILE ──
     '<div style="padding:20px;background:linear-gradient(135deg,#163524 0%,#1F4A32 100%);border-radius:20px;margin-bottom:20px;box-shadow:0 12px 28px -8px rgba(28,62,44,0.3);position:relative;overflow:hidden;">' +
       '<div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,rgba(200,122,30,0.2),transparent 70%);"></div>' +
       '<div style="position:relative;display:flex;align-items:center;gap:14px;">' +
@@ -317,6 +418,10 @@ export function renderSettings() {
       '</div>' +
     '</div>' +
 
+    // ── INSTALL APP ──
+    installSectionHtml +
+
+    // ── APPEARANCE ──
     '<div style="margin-bottom:20px;">' +
       sectionTitle("Appearance") +
       card(
@@ -338,6 +443,7 @@ export function renderSettings() {
       ) +
     '</div>' +
 
+    // ── STUDY ──
     '<div style="margin-bottom:20px;">' +
       sectionTitle("Study") +
       card(
@@ -378,6 +484,7 @@ export function renderSettings() {
       ) +
     '</div>' +
 
+    // ── LANGUAGE ──
     '<div style="margin-bottom:20px;">' +
       sectionTitle("Language & Region") +
       card(
@@ -413,6 +520,7 @@ export function renderSettings() {
       ) +
     '</div>' +
 
+    // ── NOTIFICATIONS ──
     '<div style="margin-bottom:20px;">' +
       sectionTitle("Notifications") +
       card(
@@ -421,6 +529,7 @@ export function renderSettings() {
       ) +
     '</div>' +
 
+    // ── DATA ──
     '<div style="margin-bottom:20px;">' +
       sectionTitle("Data & Storage") +
       card(
@@ -438,6 +547,7 @@ export function renderSettings() {
       ) +
     '</div>' +
 
+    // ── ADVANCED ──
     '<div style="margin-bottom:20px;">' +
       sectionTitle("Advanced") +
       card(
@@ -446,6 +556,7 @@ export function renderSettings() {
       ) +
     '</div>' +
 
+    // ── HELP ──
     '<div style="margin-bottom:20px;">' +
       sectionTitle("Help & Support") +
       card(
@@ -454,6 +565,7 @@ export function renderSettings() {
       ) +
     '</div>' +
 
+    // ── ABOUT ──
     '<div style="text-align:center;padding:24px 20px;background:#FFFFFF;border:1px solid #E1E8E1;border-radius:18px;margin-bottom:20px;">' +
       '<div style="font-size:36px;margin-bottom:8px;">\uD83C\uDF93</div>' +
       '<div style="font-size:15px;font-weight:900;color:#1C3E2C;margin-bottom:3px;">DiplomaStudy</div>' +
@@ -491,6 +603,10 @@ export function renderSettings() {
       Toast.success("Name updated");
       renderSettings();
     }
+  });
+
+  bind("#setting-install", function () {
+    doInstall();
   });
 
   bind("#setting-theme", function () {
@@ -658,9 +774,6 @@ export function renderSettings() {
     }, 500);
   });
 
-  // ═══════════════════════════════════════════
-  // SHARE APP — now with all apps
-  // ═══════════════════════════════════════════
   bind("#setting-share", function () {
     doShare();
   });
@@ -669,5 +782,5 @@ export function renderSettings() {
     window.location.href = "mailto:ar3665539@gmail.com?subject=DiplomaStudy%20Feedback";
   });
 
-  console.log("[Settings] v5 rendered OK");
+  console.log("[Settings] v6 rendered OK");
 }
