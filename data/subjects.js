@@ -69,7 +69,7 @@ export const subjects = [
     type: "Theory",
     icon: "📖",
     progress: 90,
-    chaptersCount: 6
+    chaptersCount: 12
   },
   {
     id: "english",

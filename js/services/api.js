@@ -4,12 +4,14 @@
  */
 
 import { supabase } from '../core/supabase.js';
+import { getChaptersBySubject as getStaticChaptersBySubject } from '../../data/chapters.js';
 
 // ═══════════════════════════════════════════
 // MEMORY CACHE
 // ═══════════════════════════════════════════
 const MEM_TTL = 60000;
 const _mem = new Map();
+const _inflight = new Map();
 
 function memGet(key) {
   const entry = _mem.get(key);
@@ -80,23 +82,44 @@ function cacheFirst(memKey, cacheKey, fetchFn) {
   const mem = memGet(memKey);
   if (mem) return mem;
 
+  const inFlight = _inflight.get(memKey);
+  if (inFlight) return inFlight;
+
   const cached = getCache(cacheKey);
   if (hasData(cached)) {
-    Promise.resolve().then(fetchFn).then(function (fresh) {
-      if (hasData(fresh)) {
-        saveCache(cacheKey, fresh);
-        memSet(memKey, Promise.resolve(fresh));
-      }
-    }).catch(function () {});
+    const refresh = Promise.resolve()
+      .then(fetchFn)
+      .then(function (fresh) {
+        if (hasData(fresh)) {
+          saveCache(cacheKey, fresh);
+          memSet(memKey, Promise.resolve(fresh));
+        }
+        return fresh;
+      })
+      .catch(function () {
+        return cached;
+      })
+      .finally(function () {
+        _inflight.delete(memKey);
+      });
+
+    _inflight.set(memKey, refresh);
     return Promise.resolve(cached);
   }
 
-  const p = Promise.resolve().then(fetchFn).then(function (fresh) {
-    if (hasData(fresh)) {
-      saveCache(cacheKey, fresh);
-    }
-    return fresh;
-  });
+  const p = Promise.resolve()
+    .then(fetchFn)
+    .then(function (fresh) {
+      if (hasData(fresh)) {
+        saveCache(cacheKey, fresh);
+      }
+      return fresh;
+    })
+    .finally(function () {
+      _inflight.delete(memKey);
+    });
+
+  _inflight.set(memKey, p);
   return memSet(memKey, p);
 }
 
@@ -156,12 +179,48 @@ function normalizeSubject(s) {
     semester: s.semester || 1, departmentId: s.department_id, semesterId: s.semester_id
   };
 }
+function getNumericSerial(value) {
+  if (value === null || value === undefined || value === '') return 0;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+
+  const str = String(value).trim();
+  if (!str) return 0;
+
+  const match = str.match(/-?\d+(?:\.\d+)?/);
+  if (match) return Number(match[0]);
+
+  const num = Number(str);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function sortChapters(list) {
+  return (list || []).slice().sort(function (a, b) {
+    const aSerial = getNumericSerial(a.number ?? a._serial ?? a.sortOrder ?? a.chapter_number ?? a.sort_order ?? 0);
+    const bSerial = getNumericSerial(b.number ?? b._serial ?? b.sortOrder ?? b.chapter_number ?? b.sort_order ?? 0);
+    if (aSerial !== bSerial) return aSerial - bSerial;
+
+    const aSort = getNumericSerial(a.sortOrder ?? a.sort_order ?? a._serial ?? a.number ?? 0);
+    const bSort = getNumericSerial(b.sortOrder ?? b.sort_order ?? b._serial ?? b.number ?? 0);
+    if (aSort !== bSort) return aSort - bSort;
+
+    const aText = String(a.name || a.number || '');
+    const bText = String(b.name || b.number || '');
+    return aText.localeCompare(bText, 'bn');
+  });
+}
+
 function normalizeChapter(c) {
   if (!c) return null;
+  const rawNumber = c.number ?? c.chapter_number ?? c.sort_order ?? 0;
+  const parsedNumber = getNumericSerial(rawNumber);
+  const parsedSort = getNumericSerial(c.sort_order ?? c.number ?? c.chapter_number ?? 0);
   return {
-    id: c.id, subjectId: c.subject_id, number: c.number,
-    sortOrder: c.sort_order || 0, name: c.name, nameEn: c.name_en || '',
-    icon: c.icon || ICON_CHAP, category: c.category || '', description: c.description || ''
+    id: c.id, subjectId: c.subject_id,
+    number: rawNumber,
+    sortOrder: parsedSort,
+    name: c.name, nameEn: c.name_en || '',
+    icon: c.icon || ICON_CHAP, category: c.category || '', description: c.description || '',
+    _serial: parsedNumber
   };
 }
 function normalizeQuestion(q) {
@@ -381,12 +440,17 @@ export async function getSubjectById(id) {
 export async function getChaptersBySubject(subjectId) {
   if (!subjectId) return [];
   return cacheFirst("chapters_" + subjectId, "chapters_" + subjectId, async function () {
+    const staticChapters = getStaticChaptersBySubject(subjectId);
+    if (subjectId === "bangla" && staticChapters.length > 0) return staticChapters.slice();
+
     try {
       const res = await supabase.from('chapters').select('*')
         .eq('subject_id', subjectId).eq('is_active', true)
         .order('sort_order', { ascending: true });
       if (res.error) throw res.error;
-      return (res.data || []).map(normalizeChapter);
+
+      const list = (res.data || []).map(normalizeChapter).filter(Boolean);
+      return sortChapters(list);
     } catch (err) { return []; }
   });
 }

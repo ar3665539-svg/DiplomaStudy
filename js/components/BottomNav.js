@@ -26,7 +26,8 @@ export const BottomNav = {
   render() {
     injectNavStyles();
 
-    const navStyle = `position:fixed;bottom:0;left:0;right:0;top:auto;width:100%;height:auto;z-index:50;background:#FFFFFF;border-top:1px solid #E1E8E1;box-shadow:0 -4px 20px rgba(28,62,44,0.08);padding-bottom:env(safe-area-inset-bottom,0);display:block;margin:0;font-family:inherit;`;
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    const navStyle = `position:fixed;bottom:0;left:0;right:0;top:auto;width:100%;height:auto;z-index:50;background:${isDark ? "rgba(17, 28, 24, 0.95)" : "#FFFFFF"};border-top:1px solid ${isDark ? "#253b33" : "#E1E8E1"};box-shadow:${isDark ? "0 -8px 24px rgba(0,0,0,0.28)" : "0 -4px 20px rgba(28,62,44,0.08)"};padding-bottom:env(safe-area-inset-bottom,0);display:block;margin:0;font-family:inherit;`;
     const innerStyle = `display:grid;grid-template-columns:repeat(5,1fr);height:64px;max-width:680px;margin:0 auto;padding:0 8px;align-items:stretch;width:100%;`;
 
     return `
@@ -39,7 +40,8 @@ export const BottomNav = {
   },
 
   renderItem(item) {
-    const itemStyle = `position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 2px;background:transparent;border:none;cursor:pointer;color:#84968B;text-decoration:none;font-family:inherit;-webkit-tap-highlight-color:transparent;transition:color 0.2s ease;overflow:visible;border-radius:10px;`;
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    const itemStyle = `position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 2px;background:transparent;border:none;cursor:pointer;color:${isDark ? "#89a192" : "#84968B"};text-decoration:none;font-family:inherit;-webkit-tap-highlight-color:transparent;transition:color 0.2s ease;overflow:visible;border-radius:10px;`;
     const iconWrapperStyle = `position:relative;display:flex;align-items:center;justify-content:center;width:40px;height:30px;border-radius:10px;transition:background 0.2s ease;`;
     const labelStyle = `display:block;font-size:10px;font-weight:700;line-height:1;letter-spacing:0.1px;text-align:center;color:inherit;`;
 
@@ -66,6 +68,7 @@ export const BottomNav = {
     const nav = document.getElementById("bottom-nav");
     if (!nav) return;
     const hash = window.location.hash || "#/home";
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
     nav.querySelectorAll(".nav-item").forEach((item) => {
       const route = item.getAttribute("data-route");
       const itemId = item.getAttribute("data-nav-id");
@@ -78,12 +81,12 @@ export const BottomNav = {
       else if (itemId === "home" && (hash === "" || hash === "#/" || hash === "#/home")) isActive = true;
       else if (itemId === "saved" && (hash.startsWith("#/bookmarks") || hash.startsWith("#/notes"))) isActive = true;
 
-      item.style.color = "#84968B";
+      item.style.color = isDark ? "#89a192" : "#84968B";
       if (iconWrapper) iconWrapper.style.background = "transparent";
 
       if (isActive) {
-        item.style.color = "#1C3E2C";
-        if (iconWrapper) iconWrapper.style.background = "rgba(28, 62, 44, 0.08)";
+        item.style.color = isDark ? "#9fe4b0" : "#1C3E2C";
+        if (iconWrapper) iconWrapper.style.background = isDark ? "rgba(124, 196, 154, 0.12)" : "rgba(28, 62, 44, 0.08)";
         if (label) label.style.fontWeight = "800";
       } else {
         if (label) label.style.fontWeight = "700";

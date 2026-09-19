@@ -11,6 +11,7 @@
 import { math1Chapters } from "./mathChapters.js";
 import { chemistryChapters } from "./chemistryChapters.js";
 import { materialsChapters } from "./materialsChapters.js";
+import { banglaChapters } from "./banglaChapters.js";
 
 /**
  * Subject ID অনুযায়ী chapter list দেয়
@@ -38,11 +39,14 @@ export function getChaptersBySubject(subjectId) {
       return materialsChapters;
 
     // ═══════════════════════════════════════════
+    // ৪. বাংলা ১ম বই (১২টি অধ্যায়)
+    // ═══════════════════════════════════════════
+    case "bangla":
+      return banglaChapters;
+
+    // ═══════════════════════════════════════════
     // ভবিষ্যতে যোগ হবে:
     // ═══════════════════════════════════════════
-    // case "bangla-1":
-    //   return banglaChapters;
-    //
     // case "english-1":
     //   return englishChapters;
     //

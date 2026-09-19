@@ -11,6 +11,10 @@
   background-color: var(--color-bg);
 }
 
+[data-theme="dark"] .app-shell {
+  background: radial-gradient(circle at top, rgba(124, 196, 154, 0.09), transparent 28%), var(--color-bg);
+}
+
 #app {
   flex: 1;
   display: flex;

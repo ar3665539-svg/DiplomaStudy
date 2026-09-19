@@ -89,7 +89,7 @@ export async function renderSubjectDetail(params = {}) {
   var subjectId = params.subjectId || urlParams.get("subjectId") || "";
 
   if (!subjectId) {
-    main.innerHTML = errorState({ type: "notFound", customBangla: "Subject select করা হয়নি" });
+    main.innerHTML = errorState({ type: "notFound", customBangla: "\u0053\u0075\u0062\u006a\u0065\u0063\u0074 \u0073\u0065\u006c\u0065\u0063\u0074 \u0995\u09b0\u09be \u09b9\u09df\u09a8\u09bf" });
     return;
   }
 
@@ -98,7 +98,19 @@ export async function renderSubjectDetail(params = {}) {
 
   try {
     subject = await getSubjectById(subjectId);
-    if (subject) chapters = await getChaptersBySubject(subjectId);
+    if (subject) {
+      chapters = await getChaptersBySubject(subjectId);
+      chapters = chapters.slice().sort(function (a, b) {
+        const aSerial = getNumericSerial(a.number);
+        const bSerial = getNumericSerial(b.number);
+        if (aSerial !== bSerial) return aSerial - bSerial;
+
+        const aSort = getNumericSerial(a.sortOrder);
+        const bSort = getNumericSerial(b.sortOrder);
+        if (aSort !== bSort) return aSort - bSort;
+        return 0;
+      });
+    }
   } catch (e) { loadError = e; }
 
   try {
@@ -148,30 +160,6 @@ export async function renderSubjectDetail(params = {}) {
   if (lastVisited) {
     resumeChapter = chapters.filter(function (c) { return c.id === lastVisited.chapterId; })[0];
   }
-
-  var categoryMap = {};
-  chapters.forEach(function (c) {
-    var key = c.category || "__uncategorized__";
-    if (!categoryMap[key]) categoryMap[key] = [];
-    categoryMap[key].push(c);
-  });
-
-  var categoryKeys = Object.keys(categoryMap).sort(function (a, b) {
-    if (a === "__uncategorized__") return 1;
-    if (b === "__uncategorized__") return -1;
-    return a.localeCompare(b);
-  });
-
-  var hasCategories = categoryKeys.filter(function (k) { return k !== "__uncategorized__"; }).length > 0;
-
-  var catEmojis = {
-    "\u0997\u09A6\u09CD\u09AF": "\uD83D\uDCD6",
-    "\u09AA\u09A6\u09CD\u09AF": "\uD83C\uDFAD",
-    "\u0989\u09AA\u09A8\u09CD\u09AF\u09BE\u09B8": "\uD83D\uDCD5",
-    "\u09A8\u09BE\u099F\u0995": "\uD83C\uDFAC",
-    "\u09AA\u09CD\u09B0\u09AC\u09A8\u09CD\u09A7": "\uD83D\uDCDD",
-    "__uncategorized__": "\uD83D\uDCC4"
-  };
 
   var pageBg = getPageBackground();
 
@@ -244,22 +232,7 @@ export async function renderSubjectDetail(params = {}) {
 
     html.push('<div style="display:flex;flex-direction:column;gap:8px;">');
 
-    categoryKeys.forEach(function (catKey) {
-      var catChapters = categoryMap[catKey];
-      var label = catKey === "__uncategorized__" ? "Other" : catKey;
-      var emoji = catEmojis[catKey] || "\uD83D\uDCC4";
-
-      if (hasCategories && catKey !== "__uncategorized__") {
-        html.push(
-          '<div style="display:flex;align-items:center;gap:8px;margin:14px 0 6px 4px;">',
-            '<span style="font-size:16px;">' + emoji + '</span>',
-            '<span style="font-size:13px;font-weight:800;color:#1C3E2C;">' + escapeHtml(label) + '</span>',
-            '<span style="font-size:10.5px;font-weight:800;color:#84968B;background:#F2F5F2;padding:2px 8px;border-radius:999px;">' + catChapters.length + '</span>',
-          '</div>'
-        );
-      }
-
-      catChapters.forEach(function (ch) {
+    chapters.forEach(function (ch) {
         var p = progress[ch.id];
         var status = p ? p.status : "not-started";
 
@@ -278,6 +251,7 @@ export async function renderSubjectDetail(params = {}) {
               '<div style="flex:1;min-width:0;">',
                 '<div style="font-size:13.5px;font-weight:800;color:#1C3E2C;line-height:1.3;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;">' + escapeHtml(ch.name) + '</div>',
                 (ch.nameEn ? '<div style="font-size:10.5px;color:#84968B;font-weight:500;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:4px;">' + escapeHtml(ch.nameEn) + '</div>' : ""),
+                (ch.category ? '<span style="display:inline-flex;align-items:center;font-size:9.5px;font-weight:800;color:#57675D;background:#F2F5F2;padding:2px 7px;border-radius:5px;margin-bottom:4px;">' + escapeHtml(ch.category) + '</span>' : ""),
                 '<div style="display:flex;align-items:center;gap:6px;">',
                   '<span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:800;color:' + badgeFg + ';background:' + badgeBg + ';padding:2px 7px;border-radius:5px;">' + badgeIcon + ' ' + (status === "done" ? "Done" : status === "reading" ? "Reading" : "New") + '</span>',
                 '</div>',
@@ -305,7 +279,6 @@ export async function renderSubjectDetail(params = {}) {
 
           '</div>'
         );
-      });
     });
 
     html.push('</div>');
@@ -442,4 +415,18 @@ function contentBtn(type, icon, label, colorSet, chapter, subjectId) {
 function escapeHtml(str) {
   if (str == null) return "";
   return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function getNumericSerial(value) {
+  if (value === null || value === undefined || value === '') return 0;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+
+  const str = String(value).trim();
+  if (!str) return 0;
+
+  const match = str.match(/-?\d+(?:\.\d+)?/);
+  if (match) return Number(match[0]);
+
+  const num = Number(str);
+  return Number.isFinite(num) ? num : 0;
 }

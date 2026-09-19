@@ -140,19 +140,28 @@ export async function renderFormula() {
   try {
     const subjects = await getSubjects();
     subjects.forEach((s) => { subjectsMap[s.id] = s; });
-    for (const subject of subjects) {
-      try {
-        const chapters = await getChaptersBySubject(subject.id);
-        for (const ch of chapters) {
-          try {
-            const formulas = await getFormulasByChapter(ch.id);
-            formulas.forEach((f) => {
-              allFormulas.push({ ...f, chapterName: ch.name, chapterNumber: ch.number, subjectName: subject.name, subjectId: subject.id });
-            });
-          } catch (e) {}
-        }
-      } catch (e) {}
-    }
+
+    const subjectChapterSets = await Promise.all(
+      subjects.map(async function (subject) {
+        const chapters = await getChaptersBySubject(subject.id).catch(function () { return []; });
+        return { subject, chapters };
+      })
+    );
+
+    const chapterResults = await Promise.all(
+      subjectChapterSets.flatMap(function ({ subject, chapters }) {
+        return chapters.map(async function (ch) {
+          const formulas = await getFormulasByChapter(ch.id).catch(function () { return []; });
+          return formulas.map(function (f) {
+            return { ...f, chapterName: ch.name, chapterNumber: ch.number, subjectName: subject.name, subjectId: subject.id };
+          });
+        });
+      })
+    );
+
+    chapterResults.forEach(function (list) {
+      if (Array.isArray(list)) allFormulas.push(...list);
+    });
   } catch (err) {}
 
   if ((window.location.hash || "").split("?")[0] !== MY_HASH) return;

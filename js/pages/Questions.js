@@ -143,21 +143,33 @@ export async function renderQuestions(params = {}) {
 
   try {
     const subjects = await getSubjects();
-    for (const sub of subjects) {
-      const chapters = await getChaptersBySubject(sub.id);
-      for (const ch of chapters) {
-        const qs = await getQuestionsByChapter(ch.id);
-        qs.forEach((q) => {
-          allQuestions.push({
-            ...q,
-            subjectName: sub.name,
-            chapterName: ch.name,
-            chapterNumber: ch.number,
-            subjectId: sub.id
+    const subjectChapterSets = await Promise.all(
+      subjects.map(async function (sub) {
+        const chapters = await getChaptersBySubject(sub.id).catch(function () { return []; });
+        return { sub, chapters };
+      })
+    );
+
+    const chapterResults = await Promise.all(
+      subjectChapterSets.flatMap(function ({ sub, chapters }) {
+        return chapters.map(async function (ch) {
+          const qs = await getQuestionsByChapter(ch.id).catch(function () { return []; });
+          return qs.map(function (q) {
+            return {
+              ...q,
+              subjectName: sub.name,
+              chapterName: ch.name,
+              chapterNumber: ch.number,
+              subjectId: sub.id
+            };
           });
         });
-      }
-    }
+      })
+    );
+
+    chapterResults.forEach(function (list) {
+      if (Array.isArray(list)) allQuestions.push(...list);
+    });
   } catch (e) { loadError = e; }
 
   if ((window.location.hash || "").split("?")[0] !== MY_HASH) return;
