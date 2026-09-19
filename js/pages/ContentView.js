@@ -1,5 +1,5 @@
 /**
- * ContentView v7 - Prevents pull-to-refresh and accidental reload
+ * ContentView v12 - Suggestion empty state updated
  */
 
 import { AppShell } from "../components/AppShell.js";
@@ -15,44 +15,145 @@ import { contentSkeleton } from "../utils/skeleton.js";
 import { errorState, emptyState } from "../utils/errorState.js";
 
 // ═══════════════════════════════════════════
-// INJECT STYLES: prevent pull-to-refresh + overscroll
+// LATEX PARSER
 // ═══════════════════════════════════════════
-function ensureNoRefreshStyles() {
-  if (document.getElementById("ds-no-refresh-style")) return;
+function parseLatex(input) {
+  if (!input) return "";
+  var s = String(input);
+
+  s = s.replace(/\\text\s*\{([^{}]+)\}/g, '$1');
+  s = s.replace(/\\mathrm\s*\{([^{}]+)\}/g, '$1');
+  s = s.replace(/\\mathbf\s*\{([^{}]+)\}/g, '<strong>$1</strong>');
+  s = s.replace(/\\mathit\s*\{([^{}]+)\}/g, '<em>$1</em>');
+  s = s.replace(/\\operatorname\s*\{([^{}]+)\}/g, '$1');
+
+  s = s.replace(/\\dfrac/g, '\\frac');
+  s = s.replace(/\\tfrac/g, '\\frac');
+
+  var fracRegex = /\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/;
+  var guard = 0;
+  while (fracRegex.test(s) && guard < 20) {
+    s = s.replace(fracRegex, function (m, num, den) {
+      var numHtml = parseLatexInline(num);
+      var denHtml = parseLatexInline(den);
+      return '<span class="ds-frac"><span class="ds-frac-num">' + numHtml + '</span><span class="ds-frac-den">' + denHtml + '</span></span>';
+    });
+    guard++;
+  }
+
+  s = s.replace(/\\sqrt\s*\[([^\]]+)\]\s*\{([^{}]+)\}/g, function (m, n, x) {
+    return '<span class="ds-sqrt"><sup style="font-size:0.6em;">' + n + '</sup>&radic;<span class="ds-sqrt-body">' + x + '</span></span>';
+  });
+  s = s.replace(/\\sqrt\s*\{([^{}]+)\}/g, '<span class="ds-sqrt">&radic;<span class="ds-sqrt-body">$1</span></span>');
+
+  var greek = {
+    alpha:'&alpha;', beta:'&beta;', gamma:'&gamma;', delta:'&delta;',
+    epsilon:'&epsilon;', varepsilon:'&epsilon;', zeta:'&zeta;', eta:'&eta;',
+    theta:'&theta;', vartheta:'&theta;', iota:'&iota;', kappa:'&kappa;',
+    lambda:'&lambda;', mu:'&mu;', nu:'&nu;', xi:'&xi;',
+    pi:'&pi;', varpi:'&pi;', rho:'&rho;', sigma:'&sigma;', tau:'&tau;',
+    upsilon:'&upsilon;', phi:'&phi;', varphi:'&phi;', chi:'&chi;',
+    psi:'&psi;', omega:'&omega;',
+    Gamma:'&Gamma;', Delta:'&Delta;', Theta:'&Theta;', Lambda:'&Lambda;',
+    Xi:'&Xi;', Pi:'&Pi;', Sigma:'&Sigma;', Upsilon:'&Upsilon;',
+    Phi:'&Phi;', Psi:'&Psi;', Omega:'&Omega;'
+  };
+  Object.keys(greek).forEach(function (k) {
+    s = s.replace(new RegExp('\\\\' + k + '(?![a-zA-Z])', 'g'), greek[k]);
+  });
+
+  var ops = {
+    times:'&times;', div:'&divide;', pm:'&plusmn;', mp:'&#8723;',
+    cdot:'&middot;', ast:'&#8727;', leq:'&le;', geq:'&ge;', neq:'&ne;',
+    approx:'&asymp;', equiv:'&equiv;', propto:'&prop;', infty:'&infin;',
+    partial:'&part;', nabla:'&nabla;', sum:'&sum;', prod:'&prod;',
+    int:'&int;', oint:'&#8750;', to:'&rarr;', rightarrow:'&rarr;',
+    leftarrow:'&larr;', leftrightarrow:'&harr;', Rightarrow:'&rArr;',
+    Leftarrow:'&lArr;', in:'&isin;', notin:'&notin;', subset:'&sub;',
+    supset:'&sup;', cup:'&cup;', cap:'&cap;', emptyset:'&empty;',
+    forall:'&forall;', exists:'&exist;', therefore:'&there4;',
+    because:'&#8757;', circ:'&#8728;', bullet:'&bull;', degree:'&deg;',
+    angle:'&ang;', perp:'&perp;', parallel:'&#8741;', simeq:'&#8771;',
+    sim:'&#8764;', ll:'&laquo;', gg:'&raquo;', le:'&le;', ge:'&ge;',
+    ne:'&ne;', doteq:'&#8784;'
+  };
+  Object.keys(ops).forEach(function (k) {
+    s = s.replace(new RegExp('\\\\' + k + '(?![a-zA-Z])', 'g'), ops[k]);
+  });
+
+  var funcs = ['sin','cos','tan','cot','sec','csc','log','ln','exp','lim',
+               'max','min','arg','det','dim','mod','bmod','arcsin','arccos',
+               'arctan','sinh','cosh','tanh'];
+  funcs.forEach(function (f) {
+    s = s.replace(new RegExp('\\\\' + f + '(?![a-zA-Z])', 'g'), f);
+  });
+
+  s = s.replace(/\\left/g, '');
+  s = s.replace(/\\right/g, '');
+
+  s = s.replace(/\^\{([^{}]+)\}/g, '<sup class="ds-sup">$1</sup>');
+  s = s.replace(/\^([0-9a-zA-Z+\-])/g, '<sup class="ds-sup">$1</sup>');
+
+  s = s.replace(/_\{([^{}]+)\}/g, '<sub class="ds-sub">$1</sub>');
+  s = s.replace(/_([0-9a-zA-Z+\-])/g, '<sub class="ds-sub">$1</sub>');
+
+  s = s.replace(/\\\\/g, '<br>');
+
+  s = s.replace(/\\([a-zA-Z]+)/g, '$1');
+
+  s = s.replace(/\\\{/g, '{');
+  s = s.replace(/\\\}/g, '}');
+
+  return s;
+}
+
+function parseLatexInline(input) {
+  if (!input) return "";
+  var s = String(input);
+  s = s.replace(/\\alpha/g, '&alpha;').replace(/\\beta/g, '&beta;')
+       .replace(/\\gamma/g, '&gamma;').replace(/\\delta/g, '&delta;')
+       .replace(/\\pi/g, '&pi;').replace(/\\theta/g, '&theta;')
+       .replace(/\\lambda/g, '&lambda;').replace(/\\mu/g, '&mu;')
+       .replace(/\\omega/g, '&omega;');
+  s = s.replace(/\^\{([^{}]+)\}/g, '<sup class="ds-sup">$1</sup>');
+  s = s.replace(/\^([0-9a-zA-Z+\-])/g, '<sup class="ds-sup">$1</sup>');
+  s = s.replace(/_\{([^{}]+)\}/g, '<sub class="ds-sub">$1</sub>');
+  s = s.replace(/_([0-9a-zA-Z+\-])/g, '<sub class="ds-sub">$1</sub>');
+  return s;
+}
+
+function formatLatex(input) {
+  if (input == null) return "";
+  var s = String(input);
+  s = s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  s = s.replace(/\r\n/g, '\n').replace(/\n/g, '<br>');
+  if (/\\[a-zA-Z]/.test(s) || /\^\{|_\{/.test(s)) {
+    s = parseLatex(s);
+  }
+  return s;
+}
+
+function ensureStyles() {
+  if (document.getElementById("ds-latex-style")) return;
   var style = document.createElement("style");
-  style.id = "ds-no-refresh-style";
+  style.id = "ds-latex-style";
   style.textContent =
-    "html, body { overscroll-behavior-y: contain; overscroll-behavior-x: none; }" +
-    ".no-refresh-zone { overscroll-behavior: contain; touch-action: pan-y; }" +
-    ".no-refresh-zone * { -webkit-tap-highlight-color: transparent; }" +
-    "@media (display-mode: standalone) { html, body { overscroll-behavior: none; } }";
+    ".ds-frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;margin:0 5px;line-height:1.15;}" +
+    ".ds-frac-num{border-bottom:1.5px solid currentColor;padding:0 8px 3px;}" +
+    ".ds-frac-den{padding:3px 8px 0;}" +
+    ".ds-sqrt{white-space:nowrap;display:inline-block;}" +
+    ".ds-sqrt-body{border-top:1.5px solid currentColor;padding:3px 5px 0;margin-left:-2px;}" +
+    ".ds-sup{font-size:0.72em;vertical-align:super;line-height:0;}" +
+    ".ds-sub{font-size:0.72em;vertical-align:sub;line-height:0;}" +
+    "html,body{overscroll-behavior-y:contain;overscroll-behavior-x:none;}";
   document.head.appendChild(style);
-}
-
-// Also disable the browser's default pull-to-refresh during content view
-function disablePullRefresh() {
-  try {
-    if (!document.body.dataset.dsNoPull) {
-      document.body.dataset.dsNoPull = "1";
-      document.body.style.overscrollBehaviorY = "contain";
-      document.documentElement.style.overscrollBehaviorY = "contain";
-    }
-  } catch (e) {}
-}
-
-function enablePullRefreshOnOtherPages() {
-  try {
-    delete document.body.dataset.dsNoPull;
-    document.body.style.overscrollBehaviorY = "";
-    document.documentElement.style.overscrollBehaviorY = "";
-  } catch (e) {}
 }
 
 var TABS = [
   { id: "pdf",        icon: "\uD83D\uDCC4", label: "PDF" },
   { id: "creative",   icon: "\uD83D\uDCDD", label: "\u09B0\u099A\u09A8\u09BE" },
   { id: "short",      icon: "\uD83D\uDCC4", label: "\u09B8\u0982\u0995\u09CD\u09B7\u09BF\u09AA\u09CD\u09A4" },
-  { id: "mcq",        icon: "\u26A1",        label: "MCQ" },
+  { id: "mcq",        icon: "\u26A1",        label: "\u0985\u09A4\u09BF \u09B8\u0982\u0995\u09CD\u09B7\u09BF\u09AA\u09CD\u09A4" },
   { id: "suggestion", icon: "\uD83D\uDCA1", label: "\u09B8\u09BE\u099C\u09C7\u09B6\u09A8" },
   { id: "formula",    icon: "\uD83E\uDDEE", label: "\u09B8\u09C2\u09A4\u09CD\u09B0" }
 ];
@@ -62,8 +163,11 @@ var _qIndex = { creative: 0, short: 0, mcq: 0 };
 var _lastTab = "pdf";
 
 export async function renderContentView(params = {}) {
-  ensureNoRefreshStyles();
-  disablePullRefresh();
+  ensureStyles();
+  try {
+    document.body.style.overscrollBehaviorY = "contain";
+    document.documentElement.style.overscrollBehaviorY = "contain";
+  } catch (e) {}
 
   var MY_HASH = "#/content";
 
@@ -182,10 +286,8 @@ export async function renderContentView(params = {}) {
     '</button>';
   }).join("");
 
-  main.classList.add("no-refresh-zone");
-
   main.innerHTML = headerHtml +
-    '<div class="tabs-row" style="display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;margin-bottom:6px;scrollbar-width:none;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;">' + tabsHtml + '</div>' +
+    '<div class="tabs-row" style="display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;margin-bottom:6px;scrollbar-width:none;-webkit-overflow-scrolling:touch;">' + tabsHtml + '</div>' +
     '<div id="content-area">' + renderTab(initialTab, data) + '</div>' +
     '<div style="height:16px;"></div>';
 
@@ -308,7 +410,7 @@ function renderSingleQuestion(q, idx, type) {
   html += '</div>';
   if (q.marks) html += '<span style="font-size:9.5px;font-weight:800;color:#92400E;background:#FEF3C7;padding:2px 7px;border-radius:5px;">\uD83C\uDFAF ' + escapeHtml(q.marks) + '</span>';
   html += '</div>';
-  html += '<div style="font-size:14px;font-weight:700;color:#1C3E2C;line-height:1.55;white-space:pre-wrap;">' + escapeHtml(q.question || "") + '</div>';
+  html += '<div style="font-size:14px;font-weight:700;color:#1C3E2C;line-height:1.55;">' + formatLatex(q.question || "") + '</div>';
   html += '</div>';
 
   if (type === "mcq" && q.options && q.options.length > 0) {
@@ -318,7 +420,7 @@ function renderSingleQuestion(q, idx, type) {
       var isCorrect = opt === q.answer;
       html += '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:' + (isCorrect ? "#DCFCE7" : "#FFFFFF") + ';border:1px solid ' + (isCorrect ? "#10B981" : "#E1E8E1") + ';border-radius:10px;">' +
         '<span style="width:22px;height:22px;border-radius:7px;background:' + (isCorrect ? "#10B981" : "#F2F5F2") + ';color:' + (isCorrect ? "#FFFFFF" : "#57675D") + ';font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,monospace;flex-shrink:0;">' + letter + '</span>' +
-        '<span style="flex:1;font-size:13px;font-weight:600;color:#1C3E2C;line-height:1.5;">' + escapeHtml(opt) + '</span>' +
+        '<span style="flex:1;font-size:13px;font-weight:600;color:#1C3E2C;line-height:1.5;">' + formatLatex(opt) + '</span>' +
         (isCorrect ? '<span style="color:#10B981;font-size:15px;font-weight:800;">\u2713</span>' : "") +
       '</div>';
     });
@@ -326,7 +428,7 @@ function renderSingleQuestion(q, idx, type) {
   } else {
     html += '<div style="padding:10px 12px;border:1px solid #E1E8E1;border-radius:10px;">';
     html += '<div style="font-size:10px;font-weight:800;color:#84968B;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:5px;">\u0989\u09A4\u09CD\u09A4\u09B0</div>';
-    html += '<div style="font-size:14px;font-weight:500;color:#1C3E2C;line-height:1.7;white-space:pre-wrap;">' + escapeHtml(q.answer || "") + '</div>';
+    html += '<div style="font-size:14px;font-weight:500;color:#1C3E2C;line-height:1.7;">' + formatLatex(q.answer || "") + '</div>';
     html += '</div>';
   }
 
@@ -497,9 +599,20 @@ function showQNavigator(questions, currentIdx, type, goTo) {
   });
 }
 
+// ═══════════════════════════════════════════
+// SUGGESTIONS - Empty state shows exam notice
+// ═══════════════════════════════════════════
 function renderSuggestions(suggestions) {
   if (!suggestions || suggestions.length === 0) {
-    return emptyState({ icon: "\uD83D\uDCA1", title: "\u0995\u09CB\u09A8\u09CB \u09B8\u09BE\u099C\u09C7\u09B6\u09A8 \u09A8\u09C7\u0987", message: "\u098F\u0987 chapter-\u098F \u098F\u0996\u09A8\u09CB \u09B8\u09BE\u099C\u09C7\u09B6\u09A8 \u09AF\u09CB\u0997 \u0995\u09B0\u09BE \u09B9\u09AF\u09BC\u09A8\u09BF\u0964" });
+    return '<div style="text-align:center;padding:50px 24px;background:#FFFBEB;border:1.5px dashed #FCD34D;border-radius:16px;">' +
+      '<div style="font-size:52px;margin-bottom:14px;">\uD83D\uDCA1</div>' +
+      '<h3 style="font-size:15px;font-weight:800;color:#78350F;margin:0 0 8px;line-height:1.4;">' +
+        '\u09B8\u09BE\u099C\u09C7\u09B6\u09A8 \u09B6\u09C0\u0998\u09CD\u09B0\u0987 \u0986\u09B8\u099B\u09C7' +
+      '</h3>' +
+      '<p style="font-size:13px;color:#92400E;line-height:1.6;margin:0;font-weight:600;">' +
+        '\u09AA\u09B0\u09C0\u0995\u09CD\u09B7\u09BE\u09B0 \u0986\u0997\u09C7 \u09B8\u09BE\u099C\u09C7\u09B6\u09A8 \u09A6\u09C7\u0993\u09AF\u09BC\u09BE \u09B9\u09AC\u09C7' +
+      '</p>' +
+    '</div>';
   }
   var catEmoji = { "Most Important": "\uD83D\uDD25", "Very Important": "\u2B50", "Board Top": "\uD83C\uDFC6", "Last Minute": "\u23F0" };
   return '<div style="display:flex;flex-direction:column;gap:10px;">' +
@@ -509,9 +622,9 @@ function renderSuggestions(suggestions) {
           '<span style="font-size:13px;">' + (catEmoji[s.category] || "\uD83D\uDCA1") + '</span>' +
           '<span style="font-size:9.5px;font-weight:800;color:#92400E;background:#FEF3C7;padding:2px 7px;border-radius:5px;">' + escapeHtml(s.category || "") + '</span>' +
         '</div>' +
-        '<h3 style="font-size:14px;font-weight:800;color:#1C3E2C;margin:0 0 6px;line-height:1.35;white-space:pre-wrap;">' + escapeHtml(s.title || "") + '</h3>' +
-        '<div style="font-size:13px;color:#1C3E2C;line-height:1.65;white-space:pre-wrap;">' + escapeHtml(s.summary || "") + '</div>' +
-        (s.examTip ? '<div style="margin-top:8px;font-size:12px;color:#92400E;font-weight:600;white-space:pre-wrap;">\uD83C\uDFAF ' + escapeHtml(s.examTip) + '</div>' : "") +
+        '<h3 style="font-size:14px;font-weight:800;color:#1C3E2C;margin:0 0 6px;line-height:1.35;">' + formatLatex(s.title || "") + '</h3>' +
+        '<div style="font-size:13px;color:#1C3E2C;line-height:1.65;">' + formatLatex(s.summary || "") + '</div>' +
+        (s.examTip ? '<div style="margin-top:8px;font-size:12px;color:#92400E;font-weight:600;">\uD83C\uDFAF ' + formatLatex(s.examTip) + '</div>' : "") +
       '</div>';
     }).join("") +
   '</div>';
@@ -524,10 +637,18 @@ function renderFormulas(formulas) {
   return '<div style="display:flex;flex-direction:column;gap:10px;">' +
     formulas.map(function (f) {
       return '<div style="padding:12px 14px;background:#FFFFFF;border:1px solid #E1E8E1;border-left:3px solid #0891B2;border-radius:10px;">' +
-        '<h3 style="font-size:14px;font-weight:800;color:#0E7490;margin:0 0 10px;white-space:pre-wrap;">' + escapeHtml(f.name || "") + '</h3>' +
-        (f.equation ? '<div style="padding:10px 12px;background:#CFFAFE;border-radius:8px;text-align:center;margin-bottom:10px;"><code style="font-family:ui-monospace,monospace;font-size:15px;font-weight:800;color:#0E7490;white-space:pre-wrap;">' + escapeHtml(f.equation) + '</code></div>' : '') +
-        (f.explanation ? '<div style="font-size:13px;color:#1C3E2C;line-height:1.65;margin-bottom:8px;white-space:pre-wrap;">' + escapeHtml(f.explanation) + '</div>' : '') +
-        (f.example ? '<div style="font-size:12px;color:#57675D;line-height:1.6;padding:8px 10px;background:#F8FBF8;border-radius:8px;white-space:pre-wrap;"><strong>\u0989\u09A6\u09BE\u09B9\u09B0\u09A3:</strong> ' + escapeHtml(f.example) + '</div>' : '') +
+        '<h3 style="font-size:14px;font-weight:800;color:#0E7490;margin:0 0 10px;line-height:1.5;">' + formatLatex(f.name || "") + '</h3>' +
+        (f.equation
+          ? '<div style="padding:16px 12px;background:#CFFAFE;border-radius:8px;text-align:center;margin-bottom:12px;font-size:16px;font-weight:800;color:#0E7490;line-height:1.9;">' +
+              formatLatex(f.equation) +
+            '</div>'
+          : '') +
+        (f.explanation
+          ? '<div style="font-size:13px;color:#1C3E2C;line-height:1.75;margin-bottom:8px;">' + formatLatex(f.explanation) + '</div>'
+          : '') +
+        (f.example
+          ? '<div style="font-size:12.5px;color:#57675D;line-height:1.7;padding:10px 12px;background:#F8FBF8;border-radius:8px;"><strong style="color:#1C3E2C;">\u0989\u09A6\u09BE\u09B9\u09B0\u09A3:</strong> ' + formatLatex(f.example) + '</div>'
+          : '') +
       '</div>';
     }).join("") +
   '</div>';

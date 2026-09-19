@@ -1,6 +1,5 @@
 /**
- * DiplomaStudy - Home Page v10 (Professional + Advanced)
- * Bengali + emoji via unicode escapes (safe to paste)
+ * Home v11 - Unlocked quick actions + server-driven Continue Learning
  */
 
 import { AppShell } from "../components/AppShell.js";
@@ -19,7 +18,7 @@ import { Toast } from "../components/Toast.js";
 import { isOnline, onConnectionChange } from "../utils/apiWrapper.js";
 
 // ═══════════════════════════════════════════
-// CLEANUP TRACKER (must be at top)
+// CLEANUP TRACKER
 // ═══════════════════════════════════════════
 var currentCleanup = null;
 
@@ -170,6 +169,7 @@ function saveTodayMinutes(minutes) {
   } catch (e) {}
 }
 
+// ── Recent subjects (source of truth for "Continue Learning") ──
 function getRecentSubjects() {
   try {
     var raw = localStorage.getItem("diplomastudy_recent_subjects");
@@ -182,7 +182,7 @@ function saveRecentSubject(id, name, code, icon) {
     var list = getRecentSubjects();
     list = list.filter(function (s) { return s.id !== id; });
     list.unshift({ id: id, name: name, code: code, icon: icon, at: Date.now() });
-    list = list.slice(0, 5);
+    list = list.slice(0, 8);
     localStorage.setItem("diplomastudy_recent_subjects", JSON.stringify(list));
   } catch (e) {}
 }
@@ -254,8 +254,8 @@ function showMilestoneModal(days) {
       '<div style="position:absolute;top:-30px;right:-30px;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,rgba(245,158,11,0.4) 0%,transparent 70%);"></div>' +
       '<div style="position:relative;z-index:2;">' +
         '<div style="font-size:64px;margin-bottom:12px;">' + E.party + '</div>' +
-        '<h3 style="font-size:20px;font-weight:900;color:#FFFFFF;margin:0 0 8px;letter-spacing:-0.3px;">' + T.congrats + '!</h3>' +
-        '<p style="font-size:14px;color:rgba(255,255,255,0.85);line-height:1.5;margin:0 0 20px;">You reached a <strong style="color:#FBBF24;">' + days + ' ' + T.streak + '</strong> streak! Keep it up.</p>' +
+        '<h3 style="font-size:20px;font-weight:900;color:#FFFFFF;margin:0 0 8px;">' + T.congrats + '!</h3>' +
+        '<p style="font-size:14px;color:rgba(255,255,255,0.85);line-height:1.5;margin:0 0 20px;">You reached a <strong style="color:#FBBF24;">' + days + ' ' + T.streak + '</strong> streak!</p>' +
         '<button data-close style="width:100%;padding:13px;border-radius:12px;border:none;background:#FFFFFF;color:#1C3E2C;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;">Continue</button>' +
       '</div>' +
     '</div>';
@@ -265,9 +265,6 @@ function showMilestoneModal(days) {
   overlay.addEventListener("click", function (e) { if (e.target === overlay) close(); });
 }
 
-// ═══════════════════════════════════════════
-// DEPARTMENT PICKER
-// ═══════════════════════════════════════════
 async function showDeptSemPicker(currentDeptId, currentSemId) {
   var old = document.getElementById("ds-picker");
   if (old) old.remove();
@@ -498,12 +495,34 @@ export async function renderHome(container, params, routeToken) {
   else if (hour >= 20 || hour < 5) greeting = T.night;
 
   var latestNotices = notices.slice(0, 2);
-  var firstSubject = subjects.length > 0 ? subjects[0] : null;
 
+  // ── SERVER-DRIVEN: recent subjects matched against live server data ──
   var storedRecent = getRecentSubjects();
-  var recentSubjects = storedRecent.filter(function (r) {
-    return subjects.some(function (s) { return s.id === r.id; });
-  }).slice(0, 5);
+  var recentSubjects = storedRecent
+    .map(function (r) {
+      var live = subjects.filter(function (s) { return s.id === r.id; })[0];
+      if (!live) return null;
+      return {
+        id: live.id,
+        name: live.name,
+        code: live.code || "",
+        icon: live.icon || E.book,
+        at: r.at
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 5);
+
+  // ── SERVER-DRIVEN: Continue Learning ──
+  // Prefer most recent subject that still exists on server.
+  // If none, fall back to first subject from server.
+  var continueSubject = null;
+  if (recentSubjects.length > 0) {
+    continueSubject = subjects.filter(function (s) { return s.id === recentSubjects[0].id; })[0] || null;
+  }
+  if (!continueSubject && subjects.length > 0) {
+    continueSubject = subjects[0];
+  }
 
   var recentActivity = getRecentActivity().slice(0, 3);
 
@@ -520,7 +539,7 @@ export async function renderHome(container, params, routeToken) {
 
   var html = [];
 
-  // HERO
+  // ── HERO ──
   html.push(
     '<div style="position:relative;border-radius:24px;padding:22px 20px 20px;margin-bottom:22px;overflow:hidden;background:linear-gradient(135deg,#142E1F 0%,#1F4A32 50%,#2A5540 100%);box-shadow:0 16px 40px -12px rgba(28,62,44,0.45);">',
       '<div style="position:absolute;top:-60px;right:-60px;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(200,122,30,0.25) 0%,transparent 70%);"></div>',
@@ -560,7 +579,7 @@ export async function renderHome(container, params, routeToken) {
     '</div>'
   );
 
-  // STATS
+  // ── STATS ──
   html.push(
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:24px;">',
       statCard(E.books, subjects.length, T.subjects, "#DCFCE7", "#065F46"),
@@ -569,7 +588,7 @@ export async function renderHome(container, params, routeToken) {
     '</div>'
   );
 
-  // WEEKLY CHART
+  // ── WEEKLY CHART ──
   var maxMin = 1;
   weeklyData.forEach(function (d) { if (d.minutes > maxMin) maxMin = d.minutes; });
 
@@ -595,7 +614,7 @@ export async function renderHome(container, params, routeToken) {
     '</div>'
   );
 
-  // RECENT SUBJECTS
+  // ── RECENT SUBJECTS (server-driven) ──
   if (recentSubjects.length > 0) {
     html.push(
       '<div style="display:flex;justify-content:space-between;align-items:center;margin:0 4px 12px;">',
@@ -617,44 +636,44 @@ export async function renderHome(container, params, routeToken) {
     );
   }
 
-  // CONTINUE
-  if (firstSubject) {
+  // ── CONTINUE LEARNING (server-driven) ──
+  if (continueSubject) {
     html.push(
       '<div style="display:flex;justify-content:space-between;align-items:center;margin:0 4px 12px;">',
         '<h2 style="font-size:15px;font-weight:800;color:#1C3E2C;margin:0;">' + T.continue + '</h2>',
       '</div>',
-      '<button class="continue-card" data-subject-id="' + firstSubject.id + '" style="width:100%;display:flex;align-items:center;gap:14px;padding:16px;background:linear-gradient(135deg,#FFFFFF,#F8FBF8);border:1.5px solid #E1E8E1;border-radius:18px;cursor:pointer;font-family:inherit;text-align:left;box-shadow:0 4px 14px rgba(28,62,44,0.06);margin-bottom:24px;position:relative;overflow:hidden;">',
+      '<button class="continue-card" data-subject-id="' + continueSubject.id + '" style="width:100%;display:flex;align-items:center;gap:14px;padding:16px;background:linear-gradient(135deg,#FFFFFF,#F8FBF8);border:1.5px solid #E1E8E1;border-radius:18px;cursor:pointer;font-family:inherit;text-align:left;box-shadow:0 4px 14px rgba(28,62,44,0.06);margin-bottom:24px;position:relative;overflow:hidden;">',
         '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#10B981,#3B82F6,#8B5CF6);"></div>',
-        '<div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#DCFCE7,#BBF7D0);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;">' + (firstSubject.icon || E.book) + '</div>',
+        '<div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#DCFCE7,#BBF7D0);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;">' + (continueSubject.icon || E.book) + '</div>',
         '<div style="flex:1;min-width:0;">',
-          '<div style="font-size:10px;font-weight:800;color:#84968B;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px;">' + E.book + ' PICK UP WHERE YOU LEFT</div>',
-          '<div style="font-size:15px;font-weight:800;color:#1C3E2C;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(firstSubject.name) + '</div>',
-          '<div style="font-size:11.5px;color:#84968B;font-weight:600;">' + escapeHtml(firstSubject.code || "") + (firstSubject.credits ? ' \u2022 ' + firstSubject.credits + ' credits' : '') + '</div>',
+          '<div style="font-size:10px;font-weight:800;color:#84968B;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px;">' + E.book + ' PICK UP WHERE YOU LEFT</div>' +
+          '<div style="font-size:15px;font-weight:800;color:#1C3E2C;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(continueSubject.name) + '</div>' +
+          '<div style="font-size:11.5px;color:#84968B;font-weight:600;">' + escapeHtml(continueSubject.code || "") + (continueSubject.credits ? ' \u2022 ' + continueSubject.credits + ' credits' : '') + '</div>',
         '</div>',
         '<div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#10B981,#059669);color:#FFFFFF;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;">' + E.play + '</div>',
       '</button>'
     );
   }
 
-  // QUICK ACTIONS
+  // ── QUICK ACTIONS (all unlocked) ──
   html.push(
     '<div style="display:flex;justify-content:space-between;align-items:center;margin:0 4px 12px;">',
       '<h2 style="font-size:15px;font-weight:800;color:#1C3E2C;margin:0;">' + T.quickAct + '</h2>',
       '<button id="home-all-subjects" style="font-size:11.5px;font-weight:800;color:#1C3E2C;background:transparent;border:none;font-family:inherit;cursor:pointer;padding:0;">' + T.seeAll + ' &rarr;</button>',
     '</div>',
     '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px;">',
-      quickBtn(E.books,  "Study",   "#DCFCE7", "#065F46", "#/subjects", false),
-      quickBtn(E.target, "Quiz",    "#FEF3C7", "#92400E", null, true),
-      quickBtn(E.note,   "Notes",   "#DBEAFE", "#1E40AF", null, true),
-      quickBtn(E.star,   "Saved",   "#FFE4E6", "#9F1239", null, true),
-      quickBtn(E.pdf,    "PDFs",    "#E0E7FF", "#3730A3", "#/pdfs", false),
-      quickBtn(E.calc,   "Formula", "#CFFAFE", "#155E75", "#/formulas", false),
-      quickBtn(E.cal,    "Planner", "#F3E8FF", "#6B21A8", null, true),
-      quickBtn(E.robot,  "AI",      "#FCE7F3", "#9D174D", null, true),
+      quickBtn(E.books,  "Study",   "#DCFCE7", "#065F46", "#/subjects"),
+      quickBtn(E.target, "Quiz",    "#FEF3C7", "#92400E", "#/quiz"),
+      quickBtn(E.note,   "Notes",   "#DBEAFE", "#1E40AF", "#/notes"),
+      quickBtn(E.star,   "Saved",   "#FFE4E6", "#9F1239", "#/bookmarks"),
+      quickBtn(E.pdf,    "PDFs",    "#E0E7FF", "#3730A3", "#/pdfs"),
+      quickBtn(E.calc,   "Formula", "#CFFAFE", "#155E75", "#/formulas"),
+      quickBtn(E.cal,    "Planner", "#F3E8FF", "#6B21A8", "#/planner"),
+      quickBtn(E.robot,  "AI",      "#FCE7F3", "#9D174D", "#/ai"),
     '</div>'
   );
 
-  // NOTICES
+  // ── NOTICES ──
   if (latestNotices.length > 0) {
     html.push(
       '<div style="display:flex;justify-content:space-between;align-items:center;margin:0 4px 12px;">',
@@ -683,25 +702,7 @@ export async function renderHome(container, params, routeToken) {
     html.push('<div style="height:6px;"></div>');
   }
 
-  // RECENT ACTIVITY
-  if (recentActivity.length > 0) {
-    html.push(
-      '<div style="padding:16px;background:#FFFFFF;border:1px solid #E1E8E1;border-radius:18px;box-shadow:0 3px 12px rgba(28,62,44,0.05);margin-bottom:20px;">',
-        '<h3 style="font-size:13px;font-weight:800;color:#1C3E2C;margin:0 0 12px;">' + E.check + ' ' + T.activity + '</h3>',
-        recentActivity.map(function (a, i) {
-          return '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;' + (i < recentActivity.length - 1 ? "border-bottom:1px solid #F1F5F1;" : "") + '">' +
-            '<div style="width:6px;height:6px;border-radius:50%;background:#10B981;margin-top:6px;flex-shrink:0;"></div>' +
-            '<div style="flex:1;min-width:0;">' +
-              '<div style="font-size:12.5px;color:#1C3E2C;font-weight:700;line-height:1.4;">' + escapeHtml(a.text) + '</div>' +
-              '<div style="font-size:10px;color:#84968B;font-weight:600;margin-top:2px;">' + formatTimeAgo(a.at) + '</div>' +
-            '</div>' +
-          '</div>';
-        }).join(""),
-      '</div>'
-    );
-  }
-
-  // QUOTE
+  // ── QUOTE ──
   html.push(
     '<div style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;background:linear-gradient(135deg,#F5F3FF,#EDE9FE);border:1.5px solid #DDD6FE;border-radius:16px;margin-bottom:12px;">',
       '<div style="width:36px;height:36px;border-radius:12px;background:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">' + E.quote + '</div>',
@@ -712,7 +713,7 @@ export async function renderHome(container, params, routeToken) {
     '</div>'
   );
 
-  // TIP
+  // ── TIP ──
   html.push(
     '<div style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;background:linear-gradient(135deg,#EFF6FF,#DBEAFE);border:1.5px solid #BFDBFE;border-radius:16px;margin-bottom:20px;">',
       '<div style="width:36px;height:36px;border-radius:12px;background:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">' + E.bulb + '</div>',
@@ -727,7 +728,7 @@ export async function renderHome(container, params, routeToken) {
 
   main.innerHTML = html.join("");
 
-  // BIND EVENTS
+  // ── BIND EVENTS ──
   var openPicker = function () { showDeptSemPicker(currentDept.id, currentSem ? currentSem.id : null); };
   main.querySelector("#hero-dept-btn") && main.querySelector("#hero-dept-btn").addEventListener("click", openPicker);
   main.querySelector("#hero-sem-btn") && main.querySelector("#hero-sem-btn").addEventListener("click", openPicker);
@@ -743,10 +744,12 @@ export async function renderHome(container, params, routeToken) {
     btn.addEventListener("click", function (e) {
       e.preventDefault();
       var route = btn.getAttribute("data-route");
-      var locked = btn.getAttribute("data-locked") === "true";
       var label = btn.getAttribute("data-quick");
-      if (locked || !route) showInlineModal(label, "This feature is coming soon.");
-      else window.location.hash = route;
+      if (!route) {
+        showInlineModal(label, "This feature is coming soon.");
+      } else {
+        window.location.hash = route;
+      }
     });
   });
 
@@ -766,7 +769,11 @@ export async function renderHome(container, params, routeToken) {
     card.addEventListener("click", function (e) {
       e.preventDefault();
       var id = card.getAttribute("data-subject-id");
-      if (id) window.location.hash = "#/subject?subjectId=" + id;
+      if (id) {
+        var sub = subjects.filter(function (s) { return s.id === id; })[0];
+        if (sub) saveRecentSubject(sub.id, sub.name, sub.code, sub.icon);
+        window.location.hash = "#/subject?subjectId=" + id;
+      }
     });
   });
 
@@ -776,8 +783,6 @@ export async function renderHome(container, params, routeToken) {
       window.location.hash = "#/notices";
     });
   });
-
-  if (firstSubject) saveRecentSubject(firstSubject.id, firstSubject.name, firstSubject.code, firstSubject.icon);
 
   if (showMilestone) {
     setTimeout(function () {
@@ -815,11 +820,11 @@ function statCard(icon, value, label, bg, color) {
   '</div>';
 }
 
-function quickBtn(icon, label, bg, color, route, locked) {
-  return '<button data-quick="' + label + '" data-route="' + (route || "") + '" data-locked="' + (locked ? "true" : "false") + '" style="position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 4px 10px;background:#FFFFFF;border:1px solid #E1E8E1;border-radius:16px;cursor:pointer;font-family:inherit;box-shadow:0 2px 6px rgba(28,62,44,0.04);">' +
+// No lock icon anymore — all unlocked
+function quickBtn(icon, label, bg, color, route) {
+  return '<button data-quick="' + label + '" data-route="' + (route || "") + '" style="position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 4px 10px;background:#FFFFFF;border:1px solid #E1E8E1;border-radius:16px;cursor:pointer;font-family:inherit;box-shadow:0 2px 6px rgba(28,62,44,0.04);">' +
     '<div style="width:42px;height:42px;border-radius:13px;background:' + bg + ';color:' + color + ';display:flex;align-items:center;justify-content:center;font-size:20px;">' + icon + '</div>' +
     '<span style="font-size:10.5px;font-weight:800;color:#1C3E2C;">' + label + '</span>' +
-    (locked ? '<span style="position:absolute;top:6px;right:6px;font-size:9px;opacity:0.5;">&#128274;</span>' : "") +
   '</button>';
 }
 
@@ -842,18 +847,5 @@ function formatDate(iso) {
     if (diff === 1) return T.yesterday;
     if (diff < 7) return diff + T.daysAgo;
     return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-  } catch (e) { return ""; }
-}
-
-function formatTimeAgo(timestamp) {
-  if (!timestamp) return "";
-  try {
-    var diff = Math.floor((Date.now() - timestamp) / 60000);
-    if (diff < 1) return "just now";
-    if (diff < 60) return diff + " min ago";
-    if (diff < 1440) return Math.floor(diff / 60) + " hours ago";
-    var days = Math.floor(diff / 1440);
-    if (days === 1) return "yesterday";
-    return days + " days ago";
   } catch (e) { return ""; }
 }

@@ -1,15 +1,45 @@
 /**
- * AppShell - Root shell with hash guard
- * Search icon visible by default on all pages.
+ * AppShell - Root shell with theme-aware sticky header
  */
 
 import { Header } from "./Header.js";
 import { BottomNav } from "./BottomNav.js";
 
+// Theme-aware background helper
+function getHeaderBackground() {
+  try {
+    var html = document.documentElement;
+    var body = document.body;
+    var theme = html.getAttribute("data-theme");
+
+    // Try CSS variables first (in case they exist)
+    var cs = window.getComputedStyle(html);
+    var v = cs.getPropertyValue("--bg-base") ||
+            cs.getPropertyValue("--bg-primary") ||
+            cs.getPropertyValue("--background") ||
+            cs.getPropertyValue("--color-bg");
+    if (v && v.trim()) return v.trim();
+
+    // Then read computed body bg
+    var bgb = window.getComputedStyle(body).backgroundColor;
+    if (bgb && bgb !== "rgba(0, 0, 0, 0)" && bgb !== "transparent") return bgb;
+
+    // Then html bg
+    var hbg = window.getComputedStyle(html).backgroundColor;
+    if (hbg && hbg !== "rgba(0, 0, 0, 0)" && hbg !== "transparent") return hbg;
+
+    // Fallback based on theme attribute
+    return theme === "dark" ? "#101712" : "#FAF8F3";
+  } catch (e) {
+    return "#FAF8F3";
+  }
+}
+
 export const AppShell = {
   _mainView: null,
   _initialized: false,
   _currentHash: "",
+  _themeObserver: null,
 
   init() {
     if (this._initialized) return;
@@ -23,7 +53,12 @@ export const AppShell = {
 
     appRoot.innerHTML = `
       <div class="app-shell" style="display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;">
-        <div id="header-mount"></div>
+        <div id="header-mount" style="
+          position: sticky;
+          top: 0;
+          z-index: 50;
+          background: #FAF8F3;
+        "></div>
         <main class="app-main" id="main-view" style="
           flex: 1;
           padding: 16px;
@@ -44,6 +79,10 @@ export const AppShell = {
 
     BottomNav.init();
 
+    // Apply theme-aware background now and on theme change
+    this._applyHeaderBg();
+    this._watchTheme();
+
     window.addEventListener("hashchange", () => {
       this._currentHash = (window.location.hash || "#/home").split("?")[0];
     });
@@ -53,20 +92,43 @@ export const AppShell = {
     console.log("[AppShell] Mounted");
   },
 
+  _applyHeaderBg() {
+    var mount = document.getElementById("header-mount");
+    if (!mount) return;
+    var bg = getHeaderBackground();
+    if (bg) mount.style.background = bg;
+  },
+
+  _watchTheme() {
+    // Observe data-theme attribute on <html> for changes
+    try {
+      if (this._themeObserver) this._themeObserver.disconnect();
+      var self = this;
+      this._themeObserver = new MutationObserver(function () {
+        self._applyHeaderBg();
+      });
+      this._themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["data-theme", "class"]
+      });
+    } catch (e) {}
+  },
+
   renderHeader(options = {}) {
     const mount = document.getElementById("header-mount");
     if (!mount) return;
     mount.innerHTML = Header.render(options);
     Header.bindEvents();
+    // Reapply background in case theme changed
+    var bg = getHeaderBackground();
+    if (bg) mount.style.background = bg;
   },
 
   updateHeader(options = {}) {
     if (options.expectedHash) {
       const currentHash = (window.location.hash || "#/home").split("?")[0];
       const expected = String(options.expectedHash).split("?")[0];
-
       if (currentHash !== expected) {
-        console.log("[AppShell] Header skipped (on " + currentHash + ", expected " + expected + ")");
         return;
       }
     }
@@ -77,7 +139,7 @@ export const AppShell = {
       title: "",
       subtitle: "",
       showBack: false,
-      showSearch: true,     // ⬅️ চেঞ্জ: এখন default true
+      showSearch: true,
       showSettings: true,
       showTheme: true,
       centerTitle: true,
@@ -85,7 +147,6 @@ export const AppShell = {
     });
   },
 
-  // Only updates text - does not touch icons
   updateTitle(title, subtitle) {
     try {
       Header.updateTitle(title || "", subtitle || "");

@@ -1,5 +1,5 @@
 /**
- * SubjectDetail v2 - Professional with progress tracking
+ * SubjectDetail v6 - Theme-aware sticky header (light + dark)
  */
 
 import { AppShell } from "../components/AppShell.js";
@@ -10,6 +10,33 @@ import { errorState, emptyState } from "../utils/errorState.js";
 import { Toast } from "../components/Toast.js";
 
 // ═══════════════════════════════════════════
+// THEME-AWARE BACKGROUND HELPER
+// ═══════════════════════════════════════════
+function getPageBackground() {
+  try {
+    var html = document.documentElement;
+    var cs = window.getComputedStyle(html);
+    var v = cs.getPropertyValue("--bg-base") ||
+            cs.getPropertyValue("--bg-primary") ||
+            cs.getPropertyValue("--background") ||
+            cs.getPropertyValue("--color-bg") ||
+            cs.getPropertyValue("--surface-base");
+    if (v && v.trim()) return v.trim();
+
+    var bgb = window.getComputedStyle(document.body).backgroundColor;
+    if (bgb && bgb !== "rgba(0, 0, 0, 0)" && bgb !== "transparent") return bgb;
+
+    var hbg = window.getComputedStyle(html).backgroundColor;
+    if (hbg && hbg !== "rgba(0, 0, 0, 0)" && hbg !== "transparent") return hbg;
+
+    var theme = html.getAttribute("data-theme");
+    return theme === "dark" ? "#101712" : "#FAF8F3";
+  } catch (e) {
+    return "#FAF8F3";
+  }
+}
+
+// ═══════════════════════════════════════════
 // PROGRESS HELPERS
 // ═══════════════════════════════════════════
 function getProgress(subjectId) {
@@ -18,7 +45,6 @@ function getProgress(subjectId) {
     return raw ? JSON.parse(raw) : {};
   } catch (e) { return {}; }
 }
-
 function setProgress(subjectId, chapterId, status) {
   try {
     var data = getProgress(subjectId);
@@ -26,14 +52,12 @@ function setProgress(subjectId, chapterId, status) {
     localStorage.setItem("diplomastudy_chapter_progress_" + subjectId, JSON.stringify(data));
   } catch (e) {}
 }
-
 function getLastVisited(subjectId) {
   try {
     var raw = localStorage.getItem("diplomastudy_last_chapter_" + subjectId);
     return raw ? JSON.parse(raw) : null;
   } catch (e) { return null; }
 }
-
 function setLastVisited(subjectId, chapterId) {
   try {
     localStorage.setItem("diplomastudy_last_chapter_" + subjectId, JSON.stringify({ chapterId: chapterId, at: Date.now() }));
@@ -41,7 +65,7 @@ function setLastVisited(subjectId, chapterId) {
 }
 
 // ═══════════════════════════════════════════
-// MAIN RENDER
+// RENDER
 // ═══════════════════════════════════════════
 export async function renderSubjectDetail(params = {}) {
   var MY_HASH = "#/subject";
@@ -110,13 +134,11 @@ export async function renderSubjectDetail(params = {}) {
 
   var hasChapters = chapters.length > 0;
 
-  // ── Progress calculation ──
   var progress = getProgress(subjectId);
-  var completed = 0, inProgress = 0;
+  var completed = 0;
   chapters.forEach(function (ch) {
     var p = progress[ch.id];
     if (p && p.status === "done") completed++;
-    else if (p && p.status === "reading") inProgress++;
   });
   var total = chapters.length;
   var progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -127,7 +149,6 @@ export async function renderSubjectDetail(params = {}) {
     resumeChapter = chapters.filter(function (c) { return c.id === lastVisited.chapterId; })[0];
   }
 
-  // ── Category grouping ──
   var categoryMap = {};
   chapters.forEach(function (c) {
     var key = c.category || "__uncategorized__";
@@ -152,43 +173,47 @@ export async function renderSubjectDetail(params = {}) {
     "__uncategorized__": "\uD83D\uDCC4"
   };
 
-  // ═══════════════════════════════════════════
-  // BUILD HTML
-  // ═══════════════════════════════════════════
+  var pageBg = getPageBackground();
+
   var html = [];
 
-  // ── Subject Header Card ──
+  // ═══════════════════════════════════════════
+  // STICKY SUBJECT HEADER — theme aware
+  // ═══════════════════════════════════════════
   html.push(
-    '<div style="padding:18px;background:linear-gradient(135deg,rgba(28,62,44,0.08),transparent);border-left:4px solid #1C3E2C;border-radius:16px;margin-bottom:16px;">',
-      '<div style="display:flex;align-items:flex-start;gap:14px;">',
-        '<div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#DCFCE7,#BBF7D0);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;box-shadow:0 4px 12px rgba(16,185,129,0.15);">' + (subject.icon || "\uD83D\uDCD8") + '</div>',
-        '<div style="flex:1;min-width:0;">',
-          '<h2 style="font-size:17px;font-weight:900;color:#1C3E2C;letter-spacing:-0.3px;margin:0 0 3px;">' + escapeHtml(subject.name) + '</h2>',
-          (subject.banglaName ? '<p style="font-size:12px;color:#84968B;font-weight:600;margin:0 0 6px;">' + escapeHtml(subject.banglaName) + '</p>' : ""),
-          '<div style="display:flex;gap:4px;flex-wrap:wrap;">' +
-            (subject.code ? '<span style="font-size:9.5px;font-weight:800;color:#065F46;background:#DCFCE7;padding:3px 8px;border-radius:6px;text-transform:uppercase;">' + escapeHtml(subject.code) + '</span>' : "") +
-            (subject.type ? '<span style="font-size:9.5px;font-weight:800;color:#57675D;background:#F2F5F2;padding:3px 8px;border-radius:6px;text-transform:uppercase;">' + escapeHtml(subject.type) + '</span>' : "") +
-            (subject.credits ? '<span style="font-size:9.5px;font-weight:800;color:#C87A1E;background:#FEF3C7;padding:3px 8px;border-radius:6px;">' + subject.credits + ' CR</span>' : "") +
+    '<div class="subject-sticky-head" style="position:sticky;top:0;z-index:4;background:' + pageBg + ';margin:-16px -16px 16px;padding:16px 16px 12px;">',
+
+      '<div style="padding:16px 18px;background:linear-gradient(135deg,rgba(28,62,44,0.08),transparent);border-left:4px solid #1C3E2C;border-radius:16px;">',
+
+        '<div style="display:flex;align-items:flex-start;gap:12px;">',
+          '<div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#DCFCE7,#BBF7D0);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;box-shadow:0 4px 12px rgba(16,185,129,0.15);">' + (subject.icon || "\uD83D\uDCD8") + '</div>',
+          '<div style="flex:1;min-width:0;">',
+            '<h2 style="font-size:15.5px;font-weight:900;color:#1C3E2C;letter-spacing:-0.3px;margin:0 0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(subject.name) + '</h2>',
+            (subject.banglaName ? '<p style="font-size:11.5px;color:#84968B;font-weight:600;margin:0 0 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(subject.banglaName) + '</p>' : ""),
+            '<div style="display:flex;gap:4px;flex-wrap:wrap;">' +
+              (subject.code ? '<span style="font-size:9px;font-weight:800;color:#065F46;background:#DCFCE7;padding:2px 7px;border-radius:5px;text-transform:uppercase;">' + escapeHtml(subject.code) + '</span>' : "") +
+              (subject.type ? '<span style="font-size:9px;font-weight:800;color:#57675D;background:#F2F5F2;padding:2px 7px;border-radius:5px;text-transform:uppercase;">' + escapeHtml(subject.type) + '</span>' : "") +
+              (subject.credits ? '<span style="font-size:9px;font-weight:800;color:#C87A1E;background:#FEF3C7;padding:2px 7px;border-radius:5px;">' + subject.credits + ' CR</span>' : "") +
+            '</div>',
           '</div>',
-        '</div>',
-      '</div>'
+        '</div>'
   );
 
-  // Progress bar inside subject card
   if (hasChapters) {
     html.push(
-      '<div style="margin-top:14px;padding-top:14px;border-top:1px dashed #E1E8E1;">',
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">',
-          '<span style="font-size:11px;font-weight:800;color:#57675D;letter-spacing:0.4px;text-transform:uppercase;">Progress</span>',
-          '<span style="font-size:11.5px;font-weight:900;color:#1C3E2C;">' + completed + ' / ' + total + ' ' + 'completed' + '</span>',
+      '<div style="margin-top:12px;padding-top:12px;border-top:1px dashed #E1E8E1;">',
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">',
+          '<span style="font-size:10.5px;font-weight:800;color:#57675D;letter-spacing:0.4px;text-transform:uppercase;">Progress</span>',
+          '<span style="font-size:11px;font-weight:900;color:#1C3E2C;">' + completed + ' / ' + total + ' completed</span>',
         '</div>',
-        '<div style="height:8px;background:#F2F5F2;border-radius:999px;overflow:hidden;position:relative;">',
+        '<div style="height:7px;background:#F2F5F2;border-radius:999px;overflow:hidden;">',
           '<div style="height:100%;width:' + progressPercent + '%;background:linear-gradient(90deg,#10B981,#059669);border-radius:999px;transition:width 0.4s ease;"></div>',
         '</div>',
       '</div>'
     );
   }
 
+  html.push('</div>');
   html.push('</div>');
 
   // ── Resume card ──
@@ -208,9 +233,8 @@ export async function renderSubjectDetail(params = {}) {
     }
   }
 
-  // ── Chapters list ──
+  // ── Chapters ──
   if (hasChapters) {
-    // Small info banner
     html.push(
       '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#F8FBF8;border-radius:12px;margin-bottom:14px;">',
         '<span style="font-size:12px;font-weight:700;color:#57675D;">Tap a chapter to see its content</span>',
@@ -239,7 +263,6 @@ export async function renderSubjectDetail(params = {}) {
         var p = progress[ch.id];
         var status = p ? p.status : "not-started";
 
-        // Progress badge
         var badgeBg, badgeFg, badgeIcon;
         if (status === "done") { badgeBg = "#DCFCE7"; badgeFg = "#065F46"; badgeIcon = "\u2705"; }
         else if (status === "reading") { badgeBg = "#FEF3C7"; badgeFg = "#92400E"; badgeIcon = "\uD83D\uDCD6"; }
@@ -271,11 +294,11 @@ export async function renderSubjectDetail(params = {}) {
                 '<div style="font-size:11px;font-weight:800;color:#57675D;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Choose content type</div>',
                 '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">' +
                   contentBtn("pdf", "\uD83D\uDCC4", "PDF", "pdf", ch, subjectId) +
-                  contentBtn("creative", "\uD83D\uDCDD", "Written", "creative", ch, subjectId) +
-                  contentBtn("short", "\uD83D\uDCC4", "Short", "short", ch, subjectId) +
-                  contentBtn("mcq", "\u26A1", "MCQ", "mcq", ch, subjectId) +
-                  contentBtn("suggestion", "\uD83D\uDCA1", "Suggestion", "suggestion", ch, subjectId) +
-                  contentBtn("formula", "\uD83E\uDDEE", "Formula", "formula", ch, subjectId) +
+                  contentBtn("creative", "\uD83D\uDCDD", "\u09B0\u099A\u09A8\u09BE\u09AE\u09C2\u09B2\u0995", "creative", ch, subjectId) +
+                  contentBtn("short", "\uD83D\uDCC4", "\u09B8\u0982\u0995\u09CD\u09B7\u09BF\u09AA\u09CD\u09A4", "short", ch, subjectId) +
+                  contentBtn("mcq", "\u26A1", "\u0985\u09A4\u09BF \u09B8\u0982\u0995\u09CD\u09B7\u09BF\u09AA\u09CD\u09A4", "mcq", ch, subjectId) +
+                  contentBtn("suggestion", "\uD83D\uDCA1", "\u09B8\u09BE\u099C\u09C7\u09B6\u09A8", "suggestion", ch, subjectId) +
+                  contentBtn("formula", "\uD83E\uDDEE", "\u09B8\u09C2\u09A4\u09CD\u09B0", "formula", ch, subjectId) +
                 '</div>',
               '</div>',
             '</div>',
@@ -301,10 +324,43 @@ export async function renderSubjectDetail(params = {}) {
   main.innerHTML = html.join("");
 
   // ═══════════════════════════════════════════
+  // REAPPLY STICKY OFFSET + BACKGROUND (theme-aware)
+  // ═══════════════════════════════════════════
+  function applyStickyStyles() {
+    var sticky = main.querySelector(".subject-sticky-head");
+    if (!sticky) return;
+
+    var hdrMount = document.getElementById("header-mount");
+    var hdr = document.getElementById("app-header");
+    var h = 0;
+    if (hdrMount) h = hdrMount.getBoundingClientRect().height;
+    else if (hdr) h = hdr.getBoundingClientRect().height;
+    sticky.style.top = (h > 0 ? h : 0) + "px";
+    sticky.style.background = getPageBackground();
+  }
+
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () {
+      applyStickyStyles();
+    });
+  });
+
+  // Re-apply on theme toggle (dark/light switch)
+  try {
+    if (main._dsThemeObserver) main._dsThemeObserver.disconnect();
+    main._dsThemeObserver = new MutationObserver(function () {
+      applyStickyStyles();
+    });
+    main._dsThemeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme", "class"]
+    });
+  } catch (e) {}
+
+  // ═══════════════════════════════════════════
   // BIND EVENTS
   // ═══════════════════════════════════════════
 
-  // Accordion toggle
   main.querySelectorAll("[data-toggle]").forEach(function (btn) {
     btn.addEventListener("click", function (e) {
       e.preventDefault();
@@ -334,14 +390,12 @@ export async function renderSubjectDetail(params = {}) {
         if (chevron) chevron.style.transform = "rotate(180deg)";
         if (item) item.style.borderColor = "#1C3E2C";
 
-        // Mark as "reading"
         setProgress(subjectId, chId, "reading");
         setLastVisited(subjectId, chId);
       }
     });
   });
 
-  // Content button clicks
   main.querySelectorAll("[data-content]").forEach(function (btn) {
     btn.addEventListener("click", function (e) {
       e.preventDefault();
@@ -349,14 +403,12 @@ export async function renderSubjectDetail(params = {}) {
       var type = btn.getAttribute("data-content");
       var chapterId = btn.getAttribute("data-chapter-id");
       var chapterNumber = btn.getAttribute("data-chapter-number");
-      // Mark as done
       setProgress(subjectId, chapterId, "done");
       setLastVisited(subjectId, chapterId);
       window.location.hash = "#/content?type=" + type + "&subjectId=" + subjectId + "&chapterId=" + chapterId + "&chapterNumber=" + chapterNumber;
     });
   });
 
-  // Resume button
   main.querySelectorAll(".resume-btn").forEach(function (btn) {
     btn.addEventListener("click", function (e) {
       e.preventDefault();
@@ -383,7 +435,7 @@ function contentBtn(type, icon, label, colorSet, chapter, subjectId) {
 
   return '<button data-content="' + type + '" data-chapter-id="' + chapter.id + '" data-chapter-number="' + chapter.number + '" data-subject-id="' + subjectId + '" type="button" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px 8px;background:' + c.bg + ';border:1px solid ' + c.fg + '20;border-radius:11px;cursor:pointer;font-family:inherit;">' +
     '<span style="font-size:18px;line-height:1;">' + icon + '</span>' +
-    '<span style="font-size:10px;font-weight:800;color:' + c.fg + ';line-height:1.1;text-align:center;">' + label + '</span>' +
+    '<span style="font-size:10px;font-weight:800;color:' + c.fg + ';line-height:1.15;text-align:center;">' + label + '</span>' +
   '</button>';
 }
 

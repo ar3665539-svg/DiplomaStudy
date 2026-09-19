@@ -1,9 +1,9 @@
 /**
- * DiplomaStudy - Main Bootstrap v9
- * SW KILL SWITCH - unregisters all SWs, clears caches
+ * DiplomaStudy - Main Bootstrap v10
+ * Adds prefetch on boot
  */
 
-console.log("[Main] v9 starting...");
+console.log("[Main] v10 starting...");
 
 function showBootError(stage, err) {
   var msg = (err && err.message) ? err.message : String(err);
@@ -39,6 +39,7 @@ async function boot() {
   var AppShellMod = await safeImport("./components/AppShell.js", "AppShell");
   var routerMod = await safeImport("./core/router.js", "router");
   var storageMod = await safeImport("./core/storage.js", "storage");
+  var prefetchMod = await safeImport("./core/prefetch.js", "prefetch");
 
   if (!AppShellMod || !routerMod) {
     showBootError("Core modules", new Error("AppShell or Router missing"));
@@ -150,7 +151,7 @@ async function boot() {
         var html =
           '<div style="padding:16px;">' +
           '<div style="background:#1C3E2C;color:#fff;padding:14px;border-radius:12px;text-align:center;margin-bottom:16px;">' +
-          '<div style="font-weight:800;font-size:14px;">More (fallback)</div>' +
+          '<div style="font-weight:800;font-size:14px;">More</div>' +
           '</div>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
           '<a href="#/bookmarks" style="padding:14px;border-radius:12px;background:#F3F7F3;color:#1C3E2C;text-decoration:none;font-weight:700;font-size:14px;">Bookmarks</a>' +
@@ -182,33 +183,33 @@ async function boot() {
     return;
   }
 
-  // ═══ SERVICE WORKER - KILL SWITCH ═══
-  // Unregister all SWs and clear all caches. Do NOT register new SW.
+  // ── START PREFETCH ──
+  // Kick off background data loading. Does not block the UI.
+  if (prefetchMod && typeof prefetchMod.startPrefetch === "function") {
+    prefetchMod.startPrefetch();
+    console.log("[Main] Prefetch started");
+  }
+
+  // Service worker - KILL SWITCH
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.getRegistrations().then(function (regs) {
       for (var i = 0; i < regs.length; i++) {
         regs[i].unregister();
       }
-      console.log("[SW] All unregistered (" + regs.length + ")");
-    }).catch(function (e) { console.warn("[SW] Unregister failed:", e); });
+    }).catch(function (e) {});
   }
   if (window.caches && caches.keys) {
     caches.keys().then(function (keys) {
       return Promise.all(keys.map(function (k) { return caches.delete(k); }));
-    }).then(function () {
-      console.log("[SW] All caches cleared");
-    }).catch(function (e) { console.warn("[SW] Cache clear failed:", e); });
+    }).catch(function (e) {});
   }
 
-  // Realtime (optional)
   try {
     var realtimeMod = await safeImport("./core/realtime.js", "realtime");
     if (realtimeMod && realtimeMod.initRealtime) {
       realtimeMod.initRealtime();
     }
-  } catch (err) {
-    console.warn("[Main] Realtime skipped:", err);
-  }
+  } catch (err) {}
 
   console.log("[Main] Boot complete");
 }

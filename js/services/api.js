@@ -1,6 +1,6 @@
 /**
- * DiplomaStudy User App - API Service v6
- * FIX: cache write on first fetch (was missing in v5)
+ * DiplomaStudy User App - API Service v7
+ * Fix: Questions now in ascending order (1, 2, 3...)
  */
 
 import { supabase } from '../core/supabase.js';
@@ -68,10 +68,7 @@ export function invalidateCache(pattern) {
 }
 
 // ═══════════════════════════════════════════
-// CACHE-FIRST HELPER (FIXED)
-// - Memory hit -> return instantly
-// - localStorage hit -> return instantly + background refresh
-// - No cache -> fetch, SAVE to cache, return
+// CACHE-FIRST HELPER
 // ═══════════════════════════════════════════
 function hasData(v) {
   if (v == null) return false;
@@ -80,11 +77,9 @@ function hasData(v) {
 }
 
 function cacheFirst(memKey, cacheKey, fetchFn) {
-  // 1. Memory cache
   const mem = memGet(memKey);
   if (mem) return mem;
 
-  // 2. localStorage cache — return instantly, refresh in background
   const cached = getCache(cacheKey);
   if (hasData(cached)) {
     Promise.resolve().then(fetchFn).then(function (fresh) {
@@ -96,10 +91,9 @@ function cacheFirst(memKey, cacheKey, fetchFn) {
     return Promise.resolve(cached);
   }
 
-  // 3. No cache — fetch, SAVE to localStorage, then return
   const p = Promise.resolve().then(fetchFn).then(function (fresh) {
     if (hasData(fresh)) {
-      saveCache(cacheKey, fresh);      // ⬅️ এটাই v5-এ বাদ পড়েছিল
+      saveCache(cacheKey, fresh);
     }
     return fresh;
   });
@@ -409,16 +403,16 @@ export async function getChapterById(chapterId) {
 }
 
 // ═══════════════════════════════════════════
-// QUESTIONS
+// QUESTIONS - FIXED: ascending order (1, 2, 3...)
 // ═══════════════════════════════════════════
 export async function getQuestionsByChapter(chapterId, type) {
   if (!chapterId) return [];
-  const key = "questions_" + chapterId + "_" + (type || "all");
-  return cacheFirst(key, "questions_" + chapterId + (type ? "_" + type : ""), async function () {
+  const key = "questions_v2_" + chapterId + "_" + (type || "all");
+  return cacheFirst(key, "questions_v2_" + chapterId + (type ? "_" + type : ""), async function () {
     try {
       let query = supabase.from('questions').select('*')
         .eq('chapter_id', chapterId).eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: true });
       if (type) query = query.eq('type', type);
       const res = await query;
       if (res.error) throw res.error;
@@ -436,7 +430,7 @@ export async function getSuggestionsByChapter(chapterId) {
     try {
       const res = await supabase.from('suggestions').select('*')
         .eq('chapter_id', chapterId).eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: true });
       if (res.error) throw res.error;
       return (res.data || []).map(normalizeSuggestion);
     } catch (err) { return []; }
@@ -449,7 +443,7 @@ export async function getSuggestionsBySubject(subjectId) {
     try {
       const res = await supabase.from('suggestions').select('*')
         .eq('subject_id', subjectId).eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: true });
       if (res.error) throw res.error;
       return (res.data || []).map(normalizeSuggestion);
     } catch (err) { return []; }
@@ -465,7 +459,7 @@ export async function getFormulasByChapter(chapterId) {
     try {
       const res = await supabase.from('formulas').select('*')
         .eq('chapter_id', chapterId).eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: true });
       if (res.error) throw res.error;
       return (res.data || []).map(normalizeFormula);
     } catch (err) { return []; }
@@ -481,7 +475,7 @@ export async function getPdfsByChapter(chapterId) {
     try {
       const res = await supabase.from('pdfs').select('*')
         .eq('chapter_id', chapterId).eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: true });
       if (res.error) throw res.error;
       return (res.data || []).map(normalizePdf);
     } catch (err) { return []; }
@@ -494,7 +488,7 @@ export async function getPdfsBySubject(subjectId) {
     try {
       const res = await supabase.from('pdfs').select('*')
         .eq('subject_id', subjectId).eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: true });
       if (res.error) throw res.error;
       return (res.data || []).map(normalizePdf);
     } catch (err) { return []; }
@@ -548,4 +542,4 @@ export async function searchContent(query) {
   } catch (err) { return []; }
 }
 
-console.log('[User App] API Service v6 loaded (cache-first FIXED)');
+console.log('[User App] API Service v7 loaded (ascending questions)');
