@@ -20,7 +20,7 @@ export function initRouter(routesMap) {
   _initialized = true;
 }
 
-// Export so pages can check if they're still the active route
+// ── Export used by pages to check if they are still the active route ──
 export function isRouteActive(token) {
   return token === _routeToken;
 }
@@ -32,7 +32,7 @@ export function getRouteToken() {
 function handleRoute() {
   const hash = window.location.hash || "#/home";
   currentRoute = hash;
-  const myToken = ++_routeToken; // invalidate any in-flight async work
+  const myToken = ++_routeToken;
 
   if (cleanupFn) {
     try { cleanupFn(); } catch (e) {}
@@ -55,14 +55,14 @@ function handleRoute() {
     return;
   }
 
-  import("../components/AppShell.js").then(({ AppShell }) => {
+  // Only update text - do not touch icons
+  import("../components/AppShell.js").then(function (mod) {
     try {
-      AppShell.updateHeader({
-        title: handler.title || "",
-        subtitle: handler.subtitle || ""
-      });
+      if (mod.AppShell && typeof mod.AppShell.updateTitle === "function") {
+        mod.AppShell.updateTitle(handler.title || "", handler.subtitle || "");
+      }
     } catch (e) {}
-  }).catch(() => {});
+  }).catch(function () {});
 
   const content = document.getElementById("main-view");
   if (content && handler.render) {
@@ -70,8 +70,8 @@ function handleRoute() {
     try {
       const result = handler.render(content, params, myToken);
       if (result && typeof result.then === "function") {
-        result.catch((err) => {
-          if (!isRouteActive(myToken)) return; // silent — user navigated away
+        result.catch(function (err) {
+          if (!isRouteActive(myToken)) return;
           console.error("[Router] Render error for " + pathPart + ":", err);
           content.innerHTML =
             '<div style="padding:40px 20px;text-align:center;">' +

@@ -1,6 +1,6 @@
 /**
  * AppShell - Root shell with hash guard
- * Prevents async header race conditions
+ * Search icon visible by default on all pages.
  */
 
 import { Header } from "./Header.js";
@@ -39,19 +39,18 @@ export const AppShell = {
 
     this._mainView = document.getElementById("main-view");
 
-    this.renderHeader({ showBack: false, showSettings: true });
+    this.renderHeader({ showBack: false, showSettings: true, showSearch: true });
     this.renderBottomNav();
 
     BottomNav.init();
 
-    // Track hash changes
     window.addEventListener("hashchange", () => {
       this._currentHash = (window.location.hash || "#/home").split("?")[0];
     });
 
     this._currentHash = (window.location.hash || "#/home").split("?")[0];
 
-    console.log("[AppShell] ✅ Mounted");
+    console.log("[AppShell] Mounted");
   },
 
   renderHeader(options = {}) {
@@ -61,35 +60,36 @@ export const AppShell = {
     Header.bindEvents();
   },
 
-  /**
-   * Update header with optional hash guard
-   * If expectedHash is provided, only updates when current hash matches
-   */
   updateHeader(options = {}) {
-    // ═══ HASH GUARD ═══
     if (options.expectedHash) {
       const currentHash = (window.location.hash || "#/home").split("?")[0];
       const expected = String(options.expectedHash).split("?")[0];
 
       if (currentHash !== expected) {
-        console.log(`[AppShell] ⏭ Header skipped (on ${currentHash}, expected ${expected})`);
+        console.log("[AppShell] Header skipped (on " + currentHash + ", expected " + expected + ")");
         return;
       }
     }
 
-    // Extract guard, pass rest to renderHeader
     const { expectedHash, ...headerOptions } = options;
 
     this.renderHeader({
       title: "",
       subtitle: "",
       showBack: false,
-      showSearch: false,
+      showSearch: true,     // ⬅️ চেঞ্জ: এখন default true
       showSettings: true,
       showTheme: true,
       centerTitle: true,
       ...headerOptions
     });
+  },
+
+  // Only updates text - does not touch icons
+  updateTitle(title, subtitle) {
+    try {
+      Header.updateTitle(title || "", subtitle || "");
+    } catch (e) {}
   },
 
   renderBottomNav() {

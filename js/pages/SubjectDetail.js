@@ -1,5 +1,5 @@
 /**
- * SubjectDetail — with hash guard
+ * SubjectDetail v2 - Professional with progress tracking
  */
 
 import { AppShell } from "../components/AppShell.js";
@@ -7,9 +7,44 @@ import { getSubjectById, getChaptersBySubject, getDepartments } from "../service
 import { storage, STORAGE_KEYS } from "../core/storage.js";
 import { chapterListSkeleton } from "../utils/skeleton.js";
 import { errorState, emptyState } from "../utils/errorState.js";
+import { Toast } from "../components/Toast.js";
 
+// ═══════════════════════════════════════════
+// PROGRESS HELPERS
+// ═══════════════════════════════════════════
+function getProgress(subjectId) {
+  try {
+    var raw = localStorage.getItem("diplomastudy_chapter_progress_" + subjectId);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) { return {}; }
+}
+
+function setProgress(subjectId, chapterId, status) {
+  try {
+    var data = getProgress(subjectId);
+    data[chapterId] = { status: status, at: Date.now() };
+    localStorage.setItem("diplomastudy_chapter_progress_" + subjectId, JSON.stringify(data));
+  } catch (e) {}
+}
+
+function getLastVisited(subjectId) {
+  try {
+    var raw = localStorage.getItem("diplomastudy_last_chapter_" + subjectId);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function setLastVisited(subjectId, chapterId) {
+  try {
+    localStorage.setItem("diplomastudy_last_chapter_" + subjectId, JSON.stringify({ chapterId: chapterId, at: Date.now() }));
+  } catch (e) {}
+}
+
+// ═══════════════════════════════════════════
+// MAIN RENDER
+// ═══════════════════════════════════════════
 export async function renderSubjectDetail(params = {}) {
-  const MY_HASH = "#/subject";
+  var MY_HASH = "#/subject";
 
   AppShell.updateHeader({
     title: "Loading...",
@@ -21,21 +56,21 @@ export async function renderSubjectDetail(params = {}) {
     expectedHash: MY_HASH
   });
 
-  const main = AppShell.getMainView();
+  var main = AppShell.getMainView();
   if (!main) return;
 
   main.innerHTML = chapterListSkeleton(6);
 
-  const urlParams = new URLSearchParams(window.location.hash.split("?")[1] || "");
-  const subjectId = params.subjectId || urlParams.get("subjectId") || "";
+  var urlParams = new URLSearchParams(window.location.hash.split("?")[1] || "");
+  var subjectId = params.subjectId || urlParams.get("subjectId") || "";
 
   if (!subjectId) {
     main.innerHTML = errorState({ type: "notFound", customBangla: "Subject select করা হয়নি" });
     return;
   }
 
-  let subject = null, chapters = [], deptName = "";
-  let loadError = null;
+  var subject = null, chapters = [], deptName = "";
+  var loadError = null;
 
   try {
     subject = await getSubjectById(subjectId);
@@ -43,33 +78,29 @@ export async function renderSubjectDetail(params = {}) {
   } catch (e) { loadError = e; }
 
   try {
-    const settings = storage.get(STORAGE_KEYS.SETTINGS, {});
-    const deptId = settings.departmentId || settings.department || "";
+    var settings = storage.get(STORAGE_KEYS.SETTINGS, {});
+    var deptId = settings.departmentId || settings.department || "";
     if (deptId) {
-      const depts = await getDepartments();
-      const cur = depts.find((d) => d.id === deptId);
+      var depts = await getDepartments();
+      var cur = depts.filter(function (d) { return d.id === deptId; })[0];
       if (cur) deptName = cur.name;
     }
   } catch (e) {}
 
-  // Guard
-  if ((window.location.hash || "").split("?")[0] !== MY_HASH) {
-    console.log("[SubjectDetail] Route changed — abort");
-    return;
-  }
+  if ((window.location.hash || "").split("?")[0] !== MY_HASH) return;
 
   if (!subject) {
     main.innerHTML = errorState({
       type: loadError ? "server" : "notFound",
-      message: loadError?.message,
-      retryFn: () => renderSubjectDetail(params)
+      message: loadError ? loadError.message : "",
+      retryFn: function () { renderSubjectDetail(params); }
     });
     return;
   }
 
   AppShell.updateHeader({
     title: subject.name,
-    subtitle: deptName,
+    subtitle: (chapters.length ? chapters.length + " chapters" : "") + (deptName ? " \u2022 " + deptName : ""),
     showBack: true,
     showSearch: false,
     showTheme: true,
@@ -77,134 +108,218 @@ export async function renderSubjectDetail(params = {}) {
     expectedHash: MY_HASH
   });
 
-  const hasChapters = chapters.length > 0;
+  var hasChapters = chapters.length > 0;
 
-  const categoryMap = {};
-  chapters.forEach((c) => {
-    const key = c.category || "__uncategorized__";
+  // ── Progress calculation ──
+  var progress = getProgress(subjectId);
+  var completed = 0, inProgress = 0;
+  chapters.forEach(function (ch) {
+    var p = progress[ch.id];
+    if (p && p.status === "done") completed++;
+    else if (p && p.status === "reading") inProgress++;
+  });
+  var total = chapters.length;
+  var progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  var lastVisited = getLastVisited(subjectId);
+  var resumeChapter = null;
+  if (lastVisited) {
+    resumeChapter = chapters.filter(function (c) { return c.id === lastVisited.chapterId; })[0];
+  }
+
+  // ── Category grouping ──
+  var categoryMap = {};
+  chapters.forEach(function (c) {
+    var key = c.category || "__uncategorized__";
     if (!categoryMap[key]) categoryMap[key] = [];
     categoryMap[key].push(c);
   });
 
-  const categoryKeys = Object.keys(categoryMap).sort((a, b) => {
+  var categoryKeys = Object.keys(categoryMap).sort(function (a, b) {
     if (a === "__uncategorized__") return 1;
     if (b === "__uncategorized__") return -1;
     return a.localeCompare(b);
   });
 
-  const hasCategories = categoryKeys.filter((k) => k !== "__uncategorized__").length > 0;
+  var hasCategories = categoryKeys.filter(function (k) { return k !== "__uncategorized__"; }).length > 0;
 
-  const catEmojis = {
-    "গদ্য": "📖", "পদ্য": "🎭", "উপন্যাস": "📕", "নাটক": "🎬",
-    "প্রবন্ধ": "📝", "গল্প": "📗", "কবিতা": "✒️", "জীবনী": "👤",
-    "অনুবাদ": "🔄", "ব্যাকরণ": "📐", "সাহিত্য": "📚",
-    "Prose": "📖", "Poetry": "🎭", "Novel": "📕", "Drama": "🎬",
-    "Essay": "📝", "Short Story": "📗", "Grammar": "📐",
-    "বীজগণিত": "🔢", "জ্যামিতি": "📐", "ত্রিকোণমিতি": "📊",
-    "ক্যালকুলাস": "∫", "পরিসংখ্যান": "📈", "সমীকরণ": "⚖️",
-    "মেকানিক্স": "⚙️", "তাপ": "🌡️", "শব্দ": "🔊", "আলো": "💡",
-    "বিদ্যুৎ": "⚡", "চুম্বক": "🧲",
-    "থিওরি": "📖", "ড্রয়িং": "✏️", "প্র্যাকটিক্যাল": "🔧",
-    "সার্ভে": "📐", "ম্যাটেরিয়াল": "🧱", "স্ট্রাকচার": "🏗️",
-    "__uncategorized__": "📄"
+  var catEmojis = {
+    "\u0997\u09A6\u09CD\u09AF": "\uD83D\uDCD6",
+    "\u09AA\u09A6\u09CD\u09AF": "\uD83C\uDFAD",
+    "\u0989\u09AA\u09A8\u09CD\u09AF\u09BE\u09B8": "\uD83D\uDCD5",
+    "\u09A8\u09BE\u099F\u0995": "\uD83C\uDFAC",
+    "\u09AA\u09CD\u09B0\u09AC\u09A8\u09CD\u09A7": "\uD83D\uDCDD",
+    "__uncategorized__": "\uD83D\uDCC4"
   };
 
-  main.innerHTML = `
-    <div style="padding:18px;background:linear-gradient(135deg, rgba(28,62,44,0.08), transparent);border-left:4px solid #1C3E2C;border-radius:16px;margin-bottom:18px;">
-      <div style="display:flex;align-items:center;gap:14px;">
-        <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#DCFCE7,#BBF7D0);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;box-shadow:0 4px 12px rgba(16,185,129,0.15);">${subject.icon || "📘"}</div>
-        <div style="flex:1;min-width:0;">
-          <h2 style="font-size:17px;font-weight:900;color:#1C3E2C;letter-spacing:-0.3px;margin:0 0 3px;">${escapeHtml(subject.name)}</h2>
-          ${subject.banglaName ? `<p style="font-size:12px;color:#84968B;font-weight:600;margin:0 0 6px;">${escapeHtml(subject.banglaName)}</p>` : ""}
-          <div style="display:flex;gap:4px;flex-wrap:wrap;">
-            ${subject.code ? `<span style="font-size:9.5px;font-weight:800;color:#065F46;background:#DCFCE7;padding:3px 8px;border-radius:6px;text-transform:uppercase;">${escapeHtml(subject.code)}</span>` : ""}
-            ${subject.type ? `<span style="font-size:9.5px;font-weight:800;color:#57675D;background:#F2F5F2;padding:3px 8px;border-radius:6px;text-transform:uppercase;">${escapeHtml(subject.type)}</span>` : ""}
-            ${subject.credits ? `<span style="font-size:9.5px;font-weight:800;color:#C87A1E;background:#FEF3C7;padding:3px 8px;border-radius:6px;">${subject.credits} CR</span>` : ""}
-          </div>
-        </div>
-      </div>
-    </div>
+  // ═══════════════════════════════════════════
+  // BUILD HTML
+  // ═══════════════════════════════════════════
+  var html = [];
 
-    ${hasChapters ? `
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:linear-gradient(135deg, rgba(28,62,44,0.06), transparent);border-radius:12px;margin-bottom:14px;">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:16px;">📖</span>
-          <span style="font-size:13px;font-weight:700;color:#57675D;">মোট <strong style="color:#1C3E2C;font-weight:900;">${chapters.length}</strong>টি অধ্যায়</span>
-        </div>
-        <span style="font-size:11px;color:#84968B;font-weight:600;">ট্যাপ করে খুলুন →</span>
-      </div>
+  // ── Subject Header Card ──
+  html.push(
+    '<div style="padding:18px;background:linear-gradient(135deg,rgba(28,62,44,0.08),transparent);border-left:4px solid #1C3E2C;border-radius:16px;margin-bottom:16px;">',
+      '<div style="display:flex;align-items:flex-start;gap:14px;">',
+        '<div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#DCFCE7,#BBF7D0);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;box-shadow:0 4px 12px rgba(16,185,129,0.15);">' + (subject.icon || "\uD83D\uDCD8") + '</div>',
+        '<div style="flex:1;min-width:0;">',
+          '<h2 style="font-size:17px;font-weight:900;color:#1C3E2C;letter-spacing:-0.3px;margin:0 0 3px;">' + escapeHtml(subject.name) + '</h2>',
+          (subject.banglaName ? '<p style="font-size:12px;color:#84968B;font-weight:600;margin:0 0 6px;">' + escapeHtml(subject.banglaName) + '</p>' : ""),
+          '<div style="display:flex;gap:4px;flex-wrap:wrap;">' +
+            (subject.code ? '<span style="font-size:9.5px;font-weight:800;color:#065F46;background:#DCFCE7;padding:3px 8px;border-radius:6px;text-transform:uppercase;">' + escapeHtml(subject.code) + '</span>' : "") +
+            (subject.type ? '<span style="font-size:9.5px;font-weight:800;color:#57675D;background:#F2F5F2;padding:3px 8px;border-radius:6px;text-transform:uppercase;">' + escapeHtml(subject.type) + '</span>' : "") +
+            (subject.credits ? '<span style="font-size:9.5px;font-weight:800;color:#C87A1E;background:#FEF3C7;padding:3px 8px;border-radius:6px;">' + subject.credits + ' CR</span>' : "") +
+          '</div>',
+        '</div>',
+      '</div>'
+  );
 
-      ${categoryKeys.map((catKey) => {
-        const catChapters = categoryMap[catKey];
-        const label = catKey === "__uncategorized__" ? "Other" : catKey;
-        const emoji = catEmojis[catKey] || "📄";
-        return `
-          <div style="margin-bottom:16px;">
-            ${hasCategories ? `
-              <div style="display:flex;align-items:center;gap:8px;margin:0 0 10px 4px;">
-                <span style="font-size:16px;">${emoji}</span>
-                <span style="font-size:13px;font-weight:800;color:#1C3E2C;">${escapeHtml(label)}</span>
-                <span style="font-size:10.5px;font-weight:800;color:#84968B;background:#F2F5F2;padding:2px 8px;border-radius:999px;">${catChapters.length}</span>
-              </div>
-            ` : ""}
+  // Progress bar inside subject card
+  if (hasChapters) {
+    html.push(
+      '<div style="margin-top:14px;padding-top:14px;border-top:1px dashed #E1E8E1;">',
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">',
+          '<span style="font-size:11px;font-weight:800;color:#57675D;letter-spacing:0.4px;text-transform:uppercase;">Progress</span>',
+          '<span style="font-size:11.5px;font-weight:900;color:#1C3E2C;">' + completed + ' / ' + total + ' ' + 'completed' + '</span>',
+        '</div>',
+        '<div style="height:8px;background:#F2F5F2;border-radius:999px;overflow:hidden;position:relative;">',
+          '<div style="height:100%;width:' + progressPercent + '%;background:linear-gradient(90deg,#10B981,#059669);border-radius:999px;transition:width 0.4s ease;"></div>',
+        '</div>',
+      '</div>'
+    );
+  }
 
-            <div style="display:flex;flex-direction:column;gap:8px;">
-              ${catChapters.map((ch) => `
-                <div class="chapter-item" data-chapter-id="${ch.id}" style="background:#FFFFFF;border:1.5px solid #E1E8E1;border-radius:14px;overflow:hidden;transition:all 0.2s ease;">
-                  <button class="chapter-header" data-toggle="${ch.id}" type="button" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px;background:transparent;border:none;cursor:pointer;font-family:inherit;text-align:left;">
-                    <div style="min-width:38px;height:38px;padding:0 8px;border-radius:10px;background:linear-gradient(135deg,#DCFCE7,#BBF7D0);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#065F46;font-family:ui-monospace,monospace;flex-shrink:0;">${ch.number}</div>
-                    <div style="flex:1;min-width:0;">
-                      <div style="font-size:13.5px;font-weight:800;color:#1C3E2C;line-height:1.3;margin-bottom:3px;">${escapeHtml(ch.name)}</div>
-                      ${ch.nameEn ? `<div style="font-size:10.5px;color:#84968B;font-weight:500;font-style:italic;">${escapeHtml(ch.nameEn)}</div>` : ""}
-                    </div>
-                    <div class="chevron" style="width:28px;height:28px;border-radius:50%;background:#F2F5F2;color:#57675D;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.25s cubic-bezier(0.34,1.56,0.64,1);">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                    </div>
-                  </button>
+  html.push('</div>');
 
-                  <div class="chapter-body" data-body="${ch.id}" style="max-height:0;overflow:hidden;transition:max-height 0.3s cubic-bezier(0.34,1.2,0.64,1);">
-                    <div style="padding:12px 14px 14px;border-top:1px dashed #E1E8E1;">
-                      <div style="font-size:11px;font-weight:700;color:#57675D;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">📝 Content দেখতে ট্যাপ করুন</div>
-                      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
-                        ${contentBtn("pdf", "📄", "PDF", "pdf", ch, subjectId)}
-                        ${contentBtn("creative", "📝", "রচনামূলক", "creative", ch, subjectId)}
-                        ${contentBtn("short", "📄", "সংক্ষিপ্ত", "short", ch, subjectId)}
-                        ${contentBtn("mcq", "⚡", "MCQ", "mcq", ch, subjectId)}
-                        ${contentBtn("suggestion", "💡", "সাজেশন", "suggestion", ch, subjectId)}
-                        ${contentBtn("formula", "🧮", "সূত্রাবলী", "formula", ch, subjectId)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              `).join("")}
-            </div>
-          </div>
-        `;
-      }).join("")}
-    ` : emptyState({
-      icon: "📚",
-      title: "কোনো অধ্যায় নেই",
-      message: "এই subject-এ এখনো কোনো chapter যোগ করা হয়নি।"
-    })}
+  // ── Resume card ──
+  if (resumeChapter) {
+    var resumeProgress = progress[resumeChapter.id];
+    var resumeStatus = resumeProgress ? resumeProgress.status : "not-started";
+    if (resumeStatus !== "done") {
+      html.push(
+        '<button class="resume-btn" data-chapter-id="' + resumeChapter.id + '" data-chapter-number="' + resumeChapter.number + '" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px;background:linear-gradient(135deg,#10B981,#059669);border:none;border-radius:14px;cursor:pointer;font-family:inherit;text-align:left;margin-bottom:16px;box-shadow:0 6px 18px rgba(16,185,129,0.25);">',
+          '<div style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;color:#FFFFFF;">\u25B6</div>',
+          '<div style="flex:1;min-width:0;">',
+            '<div style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.8);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:3px;">Continue from where you left</div>',
+            '<div style="font-size:13.5px;font-weight:800;color:#FFFFFF;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Ch ' + resumeChapter.number + ' \u2022 ' + escapeHtml(resumeChapter.name) + '</div>',
+          '</div>',
+        '</button>'
+      );
+    }
+  }
 
-    <div style="height:20px;"></div>
-  `;
+  // ── Chapters list ──
+  if (hasChapters) {
+    // Small info banner
+    html.push(
+      '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#F8FBF8;border-radius:12px;margin-bottom:14px;">',
+        '<span style="font-size:12px;font-weight:700;color:#57675D;">Tap a chapter to see its content</span>',
+        '<span style="font-size:11px;font-weight:900;color:#1C3E2C;background:#DCFCE7;padding:3px 9px;border-radius:999px;">' + total + '</span>',
+      '</div>'
+    );
 
-  main.querySelectorAll("[data-toggle]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
+    html.push('<div style="display:flex;flex-direction:column;gap:8px;">');
+
+    categoryKeys.forEach(function (catKey) {
+      var catChapters = categoryMap[catKey];
+      var label = catKey === "__uncategorized__" ? "Other" : catKey;
+      var emoji = catEmojis[catKey] || "\uD83D\uDCC4";
+
+      if (hasCategories && catKey !== "__uncategorized__") {
+        html.push(
+          '<div style="display:flex;align-items:center;gap:8px;margin:14px 0 6px 4px;">',
+            '<span style="font-size:16px;">' + emoji + '</span>',
+            '<span style="font-size:13px;font-weight:800;color:#1C3E2C;">' + escapeHtml(label) + '</span>',
+            '<span style="font-size:10.5px;font-weight:800;color:#84968B;background:#F2F5F2;padding:2px 8px;border-radius:999px;">' + catChapters.length + '</span>',
+          '</div>'
+        );
+      }
+
+      catChapters.forEach(function (ch) {
+        var p = progress[ch.id];
+        var status = p ? p.status : "not-started";
+
+        // Progress badge
+        var badgeBg, badgeFg, badgeIcon;
+        if (status === "done") { badgeBg = "#DCFCE7"; badgeFg = "#065F46"; badgeIcon = "\u2705"; }
+        else if (status === "reading") { badgeBg = "#FEF3C7"; badgeFg = "#92400E"; badgeIcon = "\uD83D\uDCD6"; }
+        else { badgeBg = "#F2F5F2"; badgeFg = "#84968B"; badgeIcon = "\u25CB"; }
+
+        html.push(
+          '<div class="chapter-item" data-chapter-id="' + ch.id + '" style="background:#FFFFFF;border:1.5px solid #E1E8E1;border-radius:14px;overflow:hidden;transition:all 0.2s ease;">',
+
+            '<button class="chapter-header" data-toggle="' + ch.id + '" type="button" style="width:100%;display:flex;align-items:center;gap:12px;padding:14px;background:transparent;border:none;cursor:pointer;font-family:inherit;text-align:left;">',
+
+              '<div style="min-width:42px;height:42px;padding:0 8px;border-radius:12px;background:linear-gradient(135deg,#DCFCE7,#BBF7D0);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#065F46;font-family:ui-monospace,monospace;flex-shrink:0;">' + ch.number + '</div>',
+
+              '<div style="flex:1;min-width:0;">',
+                '<div style="font-size:13.5px;font-weight:800;color:#1C3E2C;line-height:1.3;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;">' + escapeHtml(ch.name) + '</div>',
+                (ch.nameEn ? '<div style="font-size:10.5px;color:#84968B;font-weight:500;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:4px;">' + escapeHtml(ch.nameEn) + '</div>' : ""),
+                '<div style="display:flex;align-items:center;gap:6px;">',
+                  '<span style="display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:800;color:' + badgeFg + ';background:' + badgeBg + ';padding:2px 7px;border-radius:5px;">' + badgeIcon + ' ' + (status === "done" ? "Done" : status === "reading" ? "Reading" : "New") + '</span>',
+                '</div>',
+              '</div>',
+
+              '<div class="chevron" style="width:28px;height:28px;border-radius:50%;background:#F2F5F2;color:#57675D;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.25s cubic-bezier(0.34,1.56,0.64,1);">',
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"></polyline></svg>',
+              '</div>',
+
+            '</button>',
+
+            '<div class="chapter-body" data-body="' + ch.id + '" style="max-height:0;overflow:hidden;transition:max-height 0.3s cubic-bezier(0.34,1.2,0.64,1);">',
+              '<div style="padding:12px 14px 14px;border-top:1px dashed #E1E8E1;">',
+                '<div style="font-size:11px;font-weight:800;color:#57675D;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Choose content type</div>',
+                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">' +
+                  contentBtn("pdf", "\uD83D\uDCC4", "PDF", "pdf", ch, subjectId) +
+                  contentBtn("creative", "\uD83D\uDCDD", "Written", "creative", ch, subjectId) +
+                  contentBtn("short", "\uD83D\uDCC4", "Short", "short", ch, subjectId) +
+                  contentBtn("mcq", "\u26A1", "MCQ", "mcq", ch, subjectId) +
+                  contentBtn("suggestion", "\uD83D\uDCA1", "Suggestion", "suggestion", ch, subjectId) +
+                  contentBtn("formula", "\uD83E\uDDEE", "Formula", "formula", ch, subjectId) +
+                '</div>',
+              '</div>',
+            '</div>',
+
+          '</div>'
+        );
+      });
+    });
+
+    html.push('</div>');
+  } else {
+    html.push(
+      '<div style="text-align:center;padding:60px 20px;">',
+        '<div style="font-size:56px;margin-bottom:12px;">\uD83D\uDCDA</div>',
+        '<h3 style="font-size:15px;font-weight:800;color:#1C3E2C;margin:0 0 6px;">No chapters yet</h3>',
+        '<p style="font-size:12.5px;color:#84968B;">This subject has no chapters added.</p>',
+      '</div>'
+    );
+  }
+
+  html.push('<div style="height:20px;"></div>');
+
+  main.innerHTML = html.join("");
+
+  // ═══════════════════════════════════════════
+  // BIND EVENTS
+  // ═══════════════════════════════════════════
+
+  // Accordion toggle
+  main.querySelectorAll("[data-toggle]").forEach(function (btn) {
+    btn.addEventListener("click", function (e) {
       e.preventDefault();
       e.stopPropagation();
-      const chId = btn.getAttribute("data-toggle");
-      const body = main.querySelector(`[data-body="${chId}"]`);
-      const item = btn.closest(".chapter-item");
-      const chevron = btn.querySelector(".chevron");
-      const isOpen = body.style.maxHeight && body.style.maxHeight !== "0px";
+      var chId = btn.getAttribute("data-toggle");
+      var body = main.querySelector('[data-body="' + chId + '"]');
+      var item = btn.closest(".chapter-item");
+      var chevron = btn.querySelector(".chevron");
+      var isOpen = body.style.maxHeight && body.style.maxHeight !== "0px";
 
-      main.querySelectorAll(".chapter-body").forEach((b) => {
+      main.querySelectorAll(".chapter-body").forEach(function (b) {
         if (b !== body) {
           b.style.maxHeight = "0";
-          const oi = b.closest(".chapter-item");
-          const oc = oi?.querySelector(".chevron");
+          var oi = b.closest(".chapter-item");
+          var oc = oi ? oi.querySelector(".chevron") : null;
           if (oc) oc.style.transform = "";
           if (oi) oi.style.borderColor = "#E1E8E1";
         }
@@ -218,45 +333,58 @@ export async function renderSubjectDetail(params = {}) {
         body.style.maxHeight = body.scrollHeight + "px";
         if (chevron) chevron.style.transform = "rotate(180deg)";
         if (item) item.style.borderColor = "#1C3E2C";
+
+        // Mark as "reading"
+        setProgress(subjectId, chId, "reading");
+        setLastVisited(subjectId, chId);
       }
     });
   });
 
-  main.querySelectorAll("[data-content]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
+  // Content button clicks
+  main.querySelectorAll("[data-content]").forEach(function (btn) {
+    btn.addEventListener("click", function (e) {
       e.preventDefault();
       e.stopPropagation();
-      const type = btn.getAttribute("data-content");
-      const chapterId = btn.getAttribute("data-chapter-id");
-      const chapterNumber = btn.getAttribute("data-chapter-number");
-      window.location.hash = `#/content?type=${type}&subjectId=${subjectId}&chapterId=${chapterId}&chapterNumber=${chapterNumber}`;
+      var type = btn.getAttribute("data-content");
+      var chapterId = btn.getAttribute("data-chapter-id");
+      var chapterNumber = btn.getAttribute("data-chapter-number");
+      // Mark as done
+      setProgress(subjectId, chapterId, "done");
+      setLastVisited(subjectId, chapterId);
+      window.location.hash = "#/content?type=" + type + "&subjectId=" + subjectId + "&chapterId=" + chapterId + "&chapterNumber=" + chapterNumber;
+    });
+  });
+
+  // Resume button
+  main.querySelectorAll(".resume-btn").forEach(function (btn) {
+    btn.addEventListener("click", function (e) {
+      e.preventDefault();
+      var chId = btn.getAttribute("data-chapter-id");
+      var chNum = btn.getAttribute("data-chapter-number");
+      window.location.hash = "#/content?subjectId=" + subjectId + "&chapterId=" + chId + "&chapterNumber=" + chNum;
     });
   });
 }
 
+// ═══════════════════════════════════════════
+// CONTENT BUTTON
+// ═══════════════════════════════════════════
 function contentBtn(type, icon, label, colorSet, chapter, subjectId) {
-  const colors = {
+  var colors = {
     pdf:        { bg: "#FEE2E2", fg: "#991B1B" },
-    rose:       { bg: "#FEE2E2", fg: "#991B1B" },
     creative:   { bg: "#DCFCE7", fg: "#065F46" },
-    forest:     { bg: "#DCFCE7", fg: "#065F46" },
     short:      { bg: "#FEF3C7", fg: "#92400E" },
-    accent:     { bg: "#FEF3C7", fg: "#92400E" },
     mcq:        { bg: "#E0E7FF", fg: "#3730A3" },
-    indigo:     { bg: "#E0E7FF", fg: "#3730A3" },
     suggestion: { bg: "#F3E8FF", fg: "#6B21A8" },
-    purple:     { bg: "#F3E8FF", fg: "#6B21A8" },
-    formula:    { bg: "#CFFAFE", fg: "#155E75" },
-    cyan:       { bg: "#CFFAFE", fg: "#155E75" }
+    formula:    { bg: "#CFFAFE", fg: "#155E75" }
   };
-  const c = colors[colorSet] || colors.pdf;
+  var c = colors[colorSet] || colors.pdf;
 
-  return `
-    <button data-content="${type}" data-chapter-id="${chapter.id}" data-chapter-number="${chapter.number}" data-subject-id="${subjectId}" type="button" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px 8px;background:${c.bg};border:1px solid ${c.fg}20;border-radius:11px;cursor:pointer;font-family:inherit;">
-      <span style="font-size:18px;line-height:1;">${icon}</span>
-      <span style="font-size:10px;font-weight:800;color:${c.fg};line-height:1.1;text-align:center;">${label}</span>
-    </button>
-  `;
+  return '<button data-content="' + type + '" data-chapter-id="' + chapter.id + '" data-chapter-number="' + chapter.number + '" data-subject-id="' + subjectId + '" type="button" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px 8px;background:' + c.bg + ';border:1px solid ' + c.fg + '20;border-radius:11px;cursor:pointer;font-family:inherit;">' +
+    '<span style="font-size:18px;line-height:1;">' + icon + '</span>' +
+    '<span style="font-size:10px;font-weight:800;color:' + c.fg + ';line-height:1.1;text-align:center;">' + label + '</span>' +
+  '</button>';
 }
 
 function escapeHtml(str) {

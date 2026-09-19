@@ -1,12 +1,12 @@
 /**
- * DiplomaStudy User App - API Service v5
- * Cache-first: return cached data INSTANTLY, refresh in background.
+ * DiplomaStudy User App - API Service v6
+ * FIX: cache write on first fetch (was missing in v5)
  */
 
 import { supabase } from '../core/supabase.js';
 
 // ═══════════════════════════════════════════
-// MEMORY CACHE (short TTL)
+// MEMORY CACHE
 // ═══════════════════════════════════════════
 const MEM_TTL = 60000;
 const _mem = new Map();
@@ -68,9 +68,10 @@ export function invalidateCache(pattern) {
 }
 
 // ═══════════════════════════════════════════
-// CACHE-FIRST HELPER
-// If cache exists, return it IMMEDIATELY, then refresh in background.
-// If no cache, wait for network.
+// CACHE-FIRST HELPER (FIXED)
+// - Memory hit -> return instantly
+// - localStorage hit -> return instantly + background refresh
+// - No cache -> fetch, SAVE to cache, return
 // ═══════════════════════════════════════════
 function hasData(v) {
   if (v == null) return false;
@@ -83,27 +84,30 @@ function cacheFirst(memKey, cacheKey, fetchFn) {
   const mem = memGet(memKey);
   if (mem) return mem;
 
-  // 2. localStorage cache - return instantly, refresh background
+  // 2. localStorage cache — return instantly, refresh in background
   const cached = getCache(cacheKey);
   if (hasData(cached)) {
-    // Fire-and-forget background refresh
     Promise.resolve().then(fetchFn).then(function (fresh) {
       if (hasData(fresh)) {
         saveCache(cacheKey, fresh);
         memSet(memKey, Promise.resolve(fresh));
       }
     }).catch(function () {});
-    // Return cached data immediately (wrapped in resolved promise)
     return Promise.resolve(cached);
   }
 
-  // 3. No cache - fetch from network
-  const p = Promise.resolve().then(fetchFn);
+  // 3. No cache — fetch, SAVE to localStorage, then return
+  const p = Promise.resolve().then(fetchFn).then(function (fresh) {
+    if (hasData(fresh)) {
+      saveCache(cacheKey, fresh);      // ⬅️ এটাই v5-এ বাদ পড়েছিল
+    }
+    return fresh;
+  });
   return memSet(memKey, p);
 }
 
 // ═══════════════════════════════════════════
-// EVENT LISTENER for invalidation
+// EVENT LISTENER
 // ═══════════════════════════════════════════
 try {
   window.addEventListener("ds:content-change", function (e) {
@@ -544,4 +548,4 @@ export async function searchContent(query) {
   } catch (err) { return []; }
 }
 
-console.log('[User App] API Service v5 loaded (cache-first)');
+console.log('[User App] API Service v6 loaded (cache-first FIXED)');
