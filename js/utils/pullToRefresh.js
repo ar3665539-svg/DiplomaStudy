@@ -1,9 +1,24 @@
 /**
- * DiplomaStudy - Pull to Refresh
- * Instagram-style pull gesture
+ * DiplomaStudy - Pull to Refresh (route-aware)
+ * Only active on Home page (#/home). All other pages ignore it.
  */
 
+function isHomeRoute() {
+  try {
+    var hash = (window.location.hash || "#/home").split("?")[0];
+    return hash === "#/home" || hash === "#/" || hash === "";
+  } catch (e) {
+    return false;
+  }
+}
+
 export function attachPullToRefresh(container, onRefresh, options = {}) {
+  // ═══ ROUTE GUARD ═══
+  // Only attach on Home page. Other pages get an empty cleanup.
+  if (!isHomeRoute()) {
+    return function () {};
+  }
+
   if (!container || typeof onRefresh !== "function") return () => {};
 
   const threshold = options.threshold || 70;
@@ -13,6 +28,7 @@ export function attachPullToRefresh(container, onRefresh, options = {}) {
   let currentY = 0;
   let pulling = false;
   let triggered = false;
+  let destroyed = false;
 
   // Create indicator
   const indicator = document.createElement("div");
@@ -49,6 +65,9 @@ export function attachPullToRefresh(container, onRefresh, options = {}) {
   const spinner = indicator.querySelector(".ptr-spinner");
 
   function onTouchStart(e) {
+    if (destroyed) return;
+    // Double-check route (in case user navigated but cleanup didn't run)
+    if (!isHomeRoute()) return;
     if (window.scrollY > 5) return;
     if (e.touches.length !== 1) return;
     startY = e.touches[0].clientY;
@@ -57,6 +76,8 @@ export function attachPullToRefresh(container, onRefresh, options = {}) {
   }
 
   function onTouchMove(e) {
+    if (destroyed) return;
+    if (!isHomeRoute()) return;
     if (window.scrollY > 5) return;
     if (e.touches.length !== 1) return;
 
@@ -70,12 +91,12 @@ export function attachPullToRefresh(container, onRefresh, options = {}) {
       indicator.style.opacity = String(Math.min(progress * 1.2, 1));
       indicator.style.transform = `translateX(-50%) translateY(${Math.max(-60 + delta * 0.8, -20)}px)`;
 
-      // Rotate spinner based on progress
       spinner.style.transform = `rotate(${progress * 360}deg)`;
     }
   }
 
   function onTouchEnd() {
+    if (destroyed) return;
     if (!pulling) return;
 
     const delta = currentY - startY;
@@ -83,15 +104,14 @@ export function attachPullToRefresh(container, onRefresh, options = {}) {
     if (delta >= threshold && !triggered) {
       triggered = true;
 
-      // Show loading state
       spinner.style.borderTopColor = "#10B981";
       spinner.style.animation = "ptr-spin 0.8s linear infinite";
       indicator.style.opacity = "1";
       indicator.style.transform = `translateX(-50%) translateY(20px)`;
 
-      // Trigger refresh
       Promise.resolve(onRefresh()).finally(() => {
         setTimeout(() => {
+          if (destroyed) return;
           indicator.style.opacity = "0";
           indicator.style.transform = `translateX(-50%) translateY(-60px)`;
           spinner.style.animation = "";
@@ -100,7 +120,6 @@ export function attachPullToRefresh(container, onRefresh, options = {}) {
         }, 400);
       });
     } else {
-      // Reset
       indicator.style.opacity = "0";
       indicator.style.transform = `translateX(-50%) translateY(-60px)`;
       spinner.style.transform = "";
@@ -131,6 +150,7 @@ export function attachPullToRefresh(container, onRefresh, options = {}) {
 
   // Return cleanup function
   return () => {
+    destroyed = true;
     container.removeEventListener("touchstart", onTouchStart);
     container.removeEventListener("touchmove", onTouchMove);
     container.removeEventListener("touchend", onTouchEnd);

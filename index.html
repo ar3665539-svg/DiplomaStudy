@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     
+    <!-- ═══════════════════════════════════════
+         GLOBAL: Prevent browser pull-to-refresh
+         (Home page has its own custom pull-to-refresh)
+         ═══════════════════════════════════════ -->
+    <style>
+      html, body {
+        overscroll-behavior-y: contain;
+        overscroll-behavior-x: none;
+      }
+    </style>
+    
     <title>DiplomaStudy — Learn Smart</title>
     
     <meta name="description" content="DiplomaStudy - Diploma in Engineering study app for BTEB students in Bangladesh." />

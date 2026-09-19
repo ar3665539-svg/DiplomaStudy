@@ -1,5 +1,5 @@
 /**
- * ContentView v6 - Preserves line breaks in formulas and suggestions
+ * ContentView v7 - Prevents pull-to-refresh and accidental reload
  */
 
 import { AppShell } from "../components/AppShell.js";
@@ -14,6 +14,40 @@ import {
 import { contentSkeleton } from "../utils/skeleton.js";
 import { errorState, emptyState } from "../utils/errorState.js";
 
+// ═══════════════════════════════════════════
+// INJECT STYLES: prevent pull-to-refresh + overscroll
+// ═══════════════════════════════════════════
+function ensureNoRefreshStyles() {
+  if (document.getElementById("ds-no-refresh-style")) return;
+  var style = document.createElement("style");
+  style.id = "ds-no-refresh-style";
+  style.textContent =
+    "html, body { overscroll-behavior-y: contain; overscroll-behavior-x: none; }" +
+    ".no-refresh-zone { overscroll-behavior: contain; touch-action: pan-y; }" +
+    ".no-refresh-zone * { -webkit-tap-highlight-color: transparent; }" +
+    "@media (display-mode: standalone) { html, body { overscroll-behavior: none; } }";
+  document.head.appendChild(style);
+}
+
+// Also disable the browser's default pull-to-refresh during content view
+function disablePullRefresh() {
+  try {
+    if (!document.body.dataset.dsNoPull) {
+      document.body.dataset.dsNoPull = "1";
+      document.body.style.overscrollBehaviorY = "contain";
+      document.documentElement.style.overscrollBehaviorY = "contain";
+    }
+  } catch (e) {}
+}
+
+function enablePullRefreshOnOtherPages() {
+  try {
+    delete document.body.dataset.dsNoPull;
+    document.body.style.overscrollBehaviorY = "";
+    document.documentElement.style.overscrollBehaviorY = "";
+  } catch (e) {}
+}
+
 var TABS = [
   { id: "pdf",        icon: "\uD83D\uDCC4", label: "PDF" },
   { id: "creative",   icon: "\uD83D\uDCDD", label: "\u09B0\u099A\u09A8\u09BE" },
@@ -25,8 +59,12 @@ var TABS = [
 
 var _lastChapterId = null;
 var _qIndex = { creative: 0, short: 0, mcq: 0 };
+var _lastTab = "pdf";
 
 export async function renderContentView(params = {}) {
+  ensureNoRefreshStyles();
+  disablePullRefresh();
+
   var MY_HASH = "#/content";
 
   AppShell.updateHeader({
@@ -47,7 +85,7 @@ export async function renderContentView(params = {}) {
   var urlParams = new URLSearchParams(window.location.hash.split("?")[1] || "");
   var subjectId = params.subjectId || urlParams.get("subjectId") || "";
   var chapterId = params.chapterId || urlParams.get("chapterId") || "";
-  var initialTab = urlParams.get("type") || "pdf";
+  var initialTab = urlParams.get("type") || _lastTab || "pdf";
 
   if (!chapterId) {
     main.innerHTML = errorState({ type: "notFound", customBangla: "\u099A\u09CD\u09AF\u09BE\u09AA\u09CD\u099F\u09BE\u09B0 \u09B8\u09BF\u09B2\u09C7\u0995\u09CD\u099F \u0995\u09B0\u09BE \u09B9\u09AF\u09BC\u09A8\u09BF" });
@@ -100,6 +138,7 @@ export async function renderContentView(params = {}) {
     _qIndex = { creative: 0, short: 0, mcq: 0 };
     _lastChapterId = chapterId;
   }
+  _lastTab = initialTab;
 
   var creative = questions.filter(function (q) { return q.type === "creative"; });
   var short = questions.filter(function (q) { return q.type === "short"; });
@@ -134,7 +173,7 @@ export async function renderContentView(params = {}) {
       'color:' + (isActive ? '#FFFFFF' : '#57675D') + ';' +
       'border:1px solid ' + (isActive ? '#1C3E2C' : '#E1E8E1') + ';' +
       'border-radius:999px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;' +
-      'line-height:1;">' +
+      'line-height:1;touch-action:manipulation;">' +
         '<span style="font-size:12px;">' + tab.icon + '</span>' +
         '<span>' + tab.label + '</span>' +
         (counts[tab.id] > 0
@@ -143,8 +182,10 @@ export async function renderContentView(params = {}) {
     '</button>';
   }).join("");
 
+  main.classList.add("no-refresh-zone");
+
   main.innerHTML = headerHtml +
-    '<div class="tabs-row" style="display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;margin-bottom:6px;scrollbar-width:none;-webkit-overflow-scrolling:touch;">' + tabsHtml + '</div>' +
+    '<div class="tabs-row" style="display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;margin-bottom:6px;scrollbar-width:none;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;">' + tabsHtml + '</div>' +
     '<div id="content-area">' + renderTab(initialTab, data) + '</div>' +
     '<div style="height:16px;"></div>';
 
@@ -153,6 +194,9 @@ export async function renderContentView(params = {}) {
   main.querySelectorAll(".content-tab").forEach(function (tab) {
     tab.addEventListener("click", function () {
       var tabId = tab.getAttribute("data-tab");
+      if (tabId === _lastTab && tab.classList.contains("active")) return;
+      _lastTab = tabId;
+
       main.querySelectorAll(".content-tab").forEach(function (t) {
         var isActive = t === tab;
         t.style.background = isActive ? "#1C3E2C" : "#FFFFFF";
@@ -208,9 +252,6 @@ function renderPdfs(pdfs) {
   '</div>';
 }
 
-// ═══════════════════════════════════════════
-// QUESTIONS
-// ═══════════════════════════════════════════
 function renderQuestions(questions, type) {
   if (!questions || questions.length === 0) {
     return emptyState({ icon: "\u2753", title: "\u0995\u09CB\u09A8\u09CB \u09AA\u09CD\u09B0\u09B6\u09CD\u09A8 \u09A8\u09C7\u0987", message: "\u098F\u0987 \u09A7\u09B0\u09A8\u09C7\u09B0 \u09AA\u09CD\u09B0\u09B6\u09CD\u09A8 \u098F\u0996\u09A8\u09CB \u09AF\u09CB\u0997 \u0995\u09B0\u09BE \u09B9\u09AF\u09BC\u09A8\u09BF\u0964" });
@@ -230,7 +271,7 @@ function renderQuestions(questions, type) {
   return '<div class="q-viewer" data-qtype="' + type + '" data-total="' + total + '">' +
 
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#FFFFFF;border:1px solid #E1E8E1;border-radius:12px;margin-bottom:10px;">' +
-      '<button class="q-prev" type="button" style="width:34px;height:34px;border-radius:9px;background:#F8FBF8;border:1px solid #E1E8E1;color:#1C3E2C;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:inherit;padding:0;">' +
+      '<button class="q-prev" type="button" style="width:34px;height:34px;border-radius:9px;background:#F8FBF8;border:1px solid #E1E8E1;color:#1C3E2C;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:inherit;padding:0;touch-action:manipulation;">' +
         '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>' +
       '</button>' +
       '<div style="flex:1;text-align:center;">' +
@@ -239,10 +280,10 @@ function renderQuestions(questions, type) {
           '<span style="color:#84968B;font-weight:700;"> / ' + total + '</span>' +
         '</span>' +
       '</div>' +
-      '<button class="q-next" type="button" style="width:34px;height:34px;border-radius:9px;background:#F8FBF8;border:1px solid #E1E8E1;color:#1C3E2C;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:inherit;padding:0;">' +
+      '<button class="q-next" type="button" style="width:34px;height:34px;border-radius:9px;background:#F8FBF8;border:1px solid #E1E8E1;color:#1C3E2C;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:inherit;padding:0;touch-action:manipulation;">' +
         '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>' +
       '</button>' +
-      '<button class="q-nav-btn" type="button" title="All questions" style="width:34px;height:34px;margin-left:6px;border-radius:9px;background:#1C3E2C;border:none;color:#FFFFFF;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:inherit;padding:0;flex-shrink:0;">' +
+      '<button class="q-nav-btn" type="button" title="All questions" style="width:34px;height:34px;margin-left:6px;border-radius:9px;background:#1C3E2C;border:none;color:#FFFFFF;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:inherit;padding:0;flex-shrink:0;touch-action:manipulation;">' +
         '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>' +
       '</button>' +
     '</div>' +
@@ -424,21 +465,21 @@ function showQNavigator(questions, currentIdx, type, goTo) {
     var num = i + 1;
     var isActive = i === currentIdx;
     var marks = q.marks ? q.marks : "";
-    gridItems += '<button class="q-nav-item" data-idx="' + i + '" type="button" style="padding:10px 4px;background:' + (isActive ? "#1C3E2C" : "#F8FBF8") + ';color:' + (isActive ? "#FFFFFF" : "#1C3E2C") + ';border:1px solid ' + (isActive ? "#1C3E2C" : "#E1E8E1") + ';border-radius:10px;font-family:inherit;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:54px;">' +
+    gridItems += '<button class="q-nav-item" data-idx="' + i + '" type="button" style="padding:10px 4px;background:' + (isActive ? "#1C3E2C" : "#F8FBF8") + ';color:' + (isActive ? "#FFFFFF" : "#1C3E2C") + ';border:1px solid ' + (isActive ? "#1C3E2C" : "#E1E8E1") + ';border-radius:10px;font-family:inherit;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:54px;touch-action:manipulation;">' +
       '<span style="font-size:15px;font-weight:900;font-family:ui-monospace,monospace;">' + num + '</span>' +
       (marks ? '<span style="font-size:8.5px;font-weight:800;opacity:0.75;">' + escapeHtml(marks) + '</span>' : "") +
     '</button>';
   }
 
   overlay.innerHTML =
-    '<div style="background:#FFFFFF;width:100%;max-width:520px;border-radius:24px 24px 0 0;padding:18px;max-height:80vh;overflow-y:auto;box-shadow:0 -12px 40px rgba(0,0,0,0.3);">' +
+    '<div style="background:#FFFFFF;width:100%;max-width:520px;border-radius:24px 24px 0 0;padding:18px;max-height:80vh;overflow-y:auto;box-shadow:0 -12px 40px rgba(0,0,0,0.3);overscroll-behavior:contain;">' +
       '<div style="width:40px;height:4px;background:#E1E8E1;border-radius:999px;margin:0 auto 14px;"></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
         '<div>' +
           '<h3 style="font-size:15px;font-weight:900;color:#1C3E2C;margin:0 0 2px;">\u09B8\u09AC \u09AA\u09CD\u09B0\u09B6\u09CD\u09A8</h3>' +
           '<div style="font-size:10.5px;color:#84968B;font-weight:700;">' + questions.length + ' questions</div>' +
         '</div>' +
-        '<button data-close type="button" style="width:32px;height:32px;border-radius:9px;background:#F2F5F2;border:none;color:#57675D;font-size:15px;cursor:pointer;font-family:inherit;">\u2715</button>' +
+        '<button data-close type="button" style="width:32px;height:32px;border-radius:9px;background:#F2F5F2;border:none;color:#57675D;font-size:15px;cursor:pointer;font-family:inherit;touch-action:manipulation;">\u2715</button>' +
       '</div>' +
       '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;">' + gridItems + '</div>' +
     '</div>';
@@ -456,9 +497,6 @@ function showQNavigator(questions, currentIdx, type, goTo) {
   });
 }
 
-// ═══════════════════════════════════════════
-// SUGGESTIONS - with white-space:pre-wrap
-// ═══════════════════════════════════════════
 function renderSuggestions(suggestions) {
   if (!suggestions || suggestions.length === 0) {
     return emptyState({ icon: "\uD83D\uDCA1", title: "\u0995\u09CB\u09A8\u09CB \u09B8\u09BE\u099C\u09C7\u09B6\u09A8 \u09A8\u09C7\u0987", message: "\u098F\u0987 chapter-\u098F \u098F\u0996\u09A8\u09CB \u09B8\u09BE\u099C\u09C7\u09B6\u09A8 \u09AF\u09CB\u0997 \u0995\u09B0\u09BE \u09B9\u09AF\u09BC\u09A8\u09BF\u0964" });
@@ -479,9 +517,6 @@ function renderSuggestions(suggestions) {
   '</div>';
 }
 
-// ═══════════════════════════════════════════
-// FORMULAS - with white-space:pre-wrap (FIXED)
-// ═══════════════════════════════════════════
 function renderFormulas(formulas) {
   if (!formulas || formulas.length === 0) {
     return emptyState({ icon: "\uD83E\uDDEE", title: "\u0995\u09CB\u09A8\u09CB \u09B8\u09C2\u09A4\u09CD\u09B0 \u09A8\u09C7\u0987", message: "\u098F\u0987 chapter-\u098F \u098F\u0996\u09A8\u09CB \u09B8\u09C2\u09A4\u09CD\u09B0 \u09AF\u09CB\u0997 \u0995\u09B0\u09BE \u09B9\u09AF\u09BC\u09A8\u09BF\u0964" });
