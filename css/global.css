@@ -186,6 +186,99 @@
   background: var(--color-surface-hover) !important;
 }
 
+/* Keep every page and dropdown surface dark, including legacy class styles. */
+[data-theme="dark"] .app-main,
+[data-theme="dark"] .page-container,
+[data-theme="dark"] .modal-content,
+[data-theme="dark"] .coming-soon-modal-content,
+[data-theme="dark"] .selection-modal-content,
+[data-theme="dark"] .semester-dropdown-menu,
+[data-theme="dark"] .dept-dropdown-menu,
+[data-theme="dark"] .semester-dropdown-trigger,
+[data-theme="dark"] .dept-dropdown-trigger,
+[data-theme="dark"] .ddm-item,
+[data-theme="dark"] .sdm-item {
+  background-color: var(--color-surface) !important;
+  color: var(--color-text) !important;
+  border-color: var(--color-border) !important;
+}
+
+[data-theme="dark"] .modal-header,
+[data-theme="dark"] .modal-body,
+[data-theme="dark"] .modal-footer,
+[data-theme="dark"] .ddm-header,
+[data-theme="dark"] .sdm-header {
+  background-color: var(--color-surface-elevated) !important;
+  color: var(--color-text) !important;
+  border-color: var(--color-border) !important;
+}
+
+[data-theme="dark"] .ddm-item:hover,
+[data-theme="dark"] .ddm-item.active,
+[data-theme="dark"] .sdm-item:hover,
+[data-theme="dark"] .sdm-item.active {
+  background-color: var(--color-surface-hover) !important;
+  color: var(--color-text) !important;
+}
+
+[data-theme="dark"] .app-main [class*="card"],
+[data-theme="dark"] .app-main [class*="panel"],
+[data-theme="dark"] .app-main [class*="modal"] {
+  border-color: var(--color-border) !important;
+}
+
+[data-theme="dark"] .hero-cta-btn,
+[data-theme="dark"] .sm-btn-cancel,
+[data-theme="dark"] .sm-close {
+  background: var(--color-surface-elevated) !important;
+  color: var(--color-text) !important;
+  border-color: var(--color-border) !important;
+}
+
+/* Subject cards must stay dark while being tapped or focused. */
+[data-theme="dark"] .subject-row,
+[data-theme="dark"] .subject-row:active,
+[data-theme="dark"] .subject-row:focus,
+[data-theme="dark"] .subject-card-full,
+[data-theme="dark"] .subject-card-full:active,
+[data-theme="dark"] .subject-card-full:focus,
+[data-theme="dark"] .subject-card-pro,
+[data-theme="dark"] .subject-card-pro:active,
+[data-theme="dark"] .subject-card-pro:focus,
+[data-theme="dark"] .sem-subj,
+[data-theme="dark"] .sem-subj:active,
+[data-theme="dark"] .sem-subj:focus {
+  background: var(--color-surface) !important;
+  color: var(--color-text) !important;
+  border-color: var(--color-border) !important;
+  outline: none !important;
+}
+
+/* Chapter rows and accordion cards must also stay dark while tapped. */
+[data-theme="dark"] .chapter-item,
+[data-theme="dark"] .chapter-header,
+[data-theme="dark"] .chapter-header:active,
+[data-theme="dark"] .chapter-header:focus,
+[data-theme="dark"] .ch-row,
+[data-theme="dark"] .ch-row:active,
+[data-theme="dark"] .ch-row:focus {
+  background: var(--color-surface) !important;
+  color: var(--color-text) !important;
+  border-color: var(--color-border) !important;
+  outline: none !important;
+}
+
+[data-theme="dark"] .chapter-body {
+  background: var(--color-surface-elevated) !important;
+  color: var(--color-text) !important;
+  border-color: var(--color-border) !important;
+}
+
+[data-theme="dark"] option {
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+}
+
 .font-bold { font-weight: 700; }
 .font-semibold { font-weight: 600; }
 .font-medium { font-weight: 500; }
