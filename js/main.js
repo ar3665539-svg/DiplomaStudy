@@ -3,7 +3,7 @@
  * PWA install support + prefetch on boot
  */
 
-console.log("[Main] v11 starting...");
+console.log("[Main] Laptop setup OK");
 
 function showBootError(stage, err) {
   var msg = (err && err.message) ? err.message : String(err);
