@@ -4,7 +4,7 @@
 
 import { AppShell } from "../components/AppShell.js";
 import { storage, STORAGE_KEYS } from "../core/storage.js";
-import { getSubjects, getDepartments, getSemestersByDepartment } from "../services/api.js";
+import { getSubjects, getDepartments, getSemestersByDepartment, recordRecentSubject } from "../services/api.js";
 import { listSkeleton } from "../utils/skeleton.js";
 import { errorState, emptyState } from "../utils/errorState.js";
 import { attachPullToRefresh } from "../utils/pullToRefresh.js";
@@ -149,7 +149,10 @@ export async function renderSubjects() {
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       const id = btn.getAttribute("data-subject-id");
-      if (id) window.location.hash = `#/subject?subjectId=${id}`;
+      if (id) {
+        recordRecentSubject(id).catch(function () {});
+        window.location.hash = `#/subject?subjectId=${id}`;
+      }
     });
     btn.addEventListener("mouseenter", () => {
       btn.style.transform = "translateY(-2px)";

@@ -389,6 +389,66 @@ export async function getSubjects() {
   return getSubjectsByAssignment(deptId, semId);
 }
 
+// ═══════════════════════════════════════════
+// RECENT SUBJECT ACTIVITY
+// Optional Supabase table: recent_subjects
+// Columns: device_id, subject_id, accessed_at
+// ═══════════════════════════════════════════
+function getDeviceId() {
+  const key = "diplomastudy_device_id";
+  try {
+    let id = localStorage.getItem(key);
+    if (!id) {
+      id = "device_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem(key, id);
+    }
+    return id;
+  } catch (e) {
+    return "anonymous";
+  }
+}
+
+export async function recordRecentSubject(subjectId) {
+  if (!subjectId) return false;
+  try {
+    const key = "diplomastudy_recent_subjects";
+    const existing = JSON.parse(localStorage.getItem(key) || "[]");
+    const list = existing.filter(function (item) { return item.id !== subjectId; });
+    list.unshift({ id: subjectId, at: Date.now() });
+    localStorage.setItem(key, JSON.stringify(list.slice(0, 8)));
+  } catch (e) {}
+
+  if (typeof navigator === "undefined" || !navigator.onLine) return false;
+  try {
+    const res = await supabase.from("recent_subjects").upsert({
+      device_id: getDeviceId(),
+      subject_id: subjectId,
+      accessed_at: new Date().toISOString()
+    }, { onConflict: "device_id,subject_id" });
+    return !res.error;
+  } catch (e) {
+    return false;
+  }
+}
+
+export async function getRecentSubjectsFromServer(subjectIds = []) {
+  if (!subjectIds.length || typeof navigator === "undefined" || !navigator.onLine) return [];
+  try {
+    const res = await supabase.from("recent_subjects")
+      .select("subject_id,accessed_at")
+      .eq("device_id", getDeviceId())
+      .in("subject_id", subjectIds)
+      .order("accessed_at", { ascending: false })
+      .limit(8);
+    if (res.error) return [];
+    return (res.data || []).map(function (item) {
+      return { id: item.subject_id, at: item.accessed_at };
+    });
+  } catch (e) {
+    return [];
+  }
+}
+
 export async function getSubjectsByAssignment(deptId, semId) {
   if (!deptId) return [];
   const key = "subjects_" + deptId + "_" + (semId || "all");

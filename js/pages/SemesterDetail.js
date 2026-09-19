@@ -3,7 +3,7 @@
  */
 
 import { AppShell } from "../components/AppShell.js";
-import { getSemestersByDepartment, getDepartments, getSubjectsByAssignment } from "../services/api.js";
+import { getSemestersByDepartment, getDepartments, getSubjectsByAssignment, recordRecentSubject } from "../services/api.js";
 import { storage, STORAGE_KEYS } from "../core/storage.js";
 import { listSkeleton } from "../utils/skeleton.js";
 import { errorState, emptyState } from "../utils/errorState.js";
@@ -129,7 +129,10 @@ export async function renderSemesterDetail(params = {}) {
   main.querySelectorAll(".sem-subj").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-subject-id");
-      if (id) window.location.hash = `#/subject?subjectId=${id}`;
+      if (id) {
+        recordRecentSubject(id).catch(function () {});
+        window.location.hash = `#/subject?subjectId=${id}`;
+      }
     });
   });
 

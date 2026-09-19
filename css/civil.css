@@ -1324,6 +1324,267 @@
   flex-shrink: 0;
 }
 
+/* More page - focused utility dashboard */
+.more-page {
+  padding: 4px 0 28px;
+}
+
+.more-hero {
+  position: relative;
+  overflow: hidden;
+  margin: 0 0 24px;
+  padding: 20px 18px 15px;
+  border: 1px solid rgba(124, 196, 154, 0.22);
+  border-radius: 16px;
+  background: var(--grad-hero);
+  color: #FFFFFF;
+  box-shadow: var(--shadow-md);
+}
+
+.more-hero::after {
+  display: none;
+}
+
+.more-hero-copy {
+  position: relative;
+  z-index: 1;
+}
+
+.more-eyebrow {
+  margin-bottom: 8px;
+  color: rgba(255,255,255,0.68);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+}
+
+.more-hero h1 {
+  margin: 0;
+  color: #FFFFFF;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.7px;
+}
+
+.more-hero p {
+  max-width: 280px;
+  margin: 5px 0 0;
+  color: rgba(255,255,255,0.76);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.more-hero-mark {
+  position: absolute;
+  right: 18px;
+  top: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255,255,255,0.22);
+  border-radius: 15px;
+  background: rgba(255,255,255,0.12);
+  color: #FFFFFF;
+}
+
+.more-hero-footer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  color: rgba(255,255,255,0.68);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.more-hero-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #7CC49A;
+}
+
+.more-feature-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.more-feature-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 15px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-xs);
+  transition: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.more-feature-item:hover,
+.more-feature-item:active,
+.more-feature-item:focus {
+  border-color: var(--color-sage);
+  background: var(--color-surface-hover);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.more-feature-item .more-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.more-feature-item > span:nth-child(2) {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.more-feature-item strong {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.more-feature-item small {
+  overflow: hidden;
+  color: var(--color-text-dim);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.more-section {
+  margin-bottom: 20px;
+}
+
+.more-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 4px 7px;
+  color: var(--color-text-dim);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.4px;
+}
+
+.more-section-line {
+  height: 1px;
+  flex: 1;
+  background: var(--color-border);
+}
+
+.more-panel {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.more-row {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-height: 62px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text);
+  text-decoration: none;
+  transition: background var(--transition-fast), padding-left var(--transition-fast);
+}
+
+.more-row.is-last {
+  border-bottom: 0;
+}
+
+.more-row:hover,
+.more-row:active,
+.more-row:focus {
+  padding-left: 16px;
+  background: var(--color-surface-hover);
+  outline: none;
+}
+
+.more-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: var(--more-icon-bg);
+  color: var(--more-icon-fg);
+}
+
+.more-row-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.1px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.more-row-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--color-text-dim);
+  transition: transform var(--transition-fast), color var(--transition-fast);
+}
+
+.more-row:hover .more-row-arrow,
+.more-row:active .more-row-arrow {
+  color: var(--color-forest);
+  transform: translateX(3px);
+}
+
+[data-theme="dark"] .more-hero {
+  border-color: rgba(124, 196, 154, 0.3);
+}
+
+[data-theme="dark"] .more-panel,
+[data-theme="dark"] .more-feature-item {
+  box-shadow: var(--shadow-md);
+}
+
+@media (max-width: 380px) {
+  .more-feature-strip {
+    gap: 7px;
+  }
+
+  .more-feature-item {
+    gap: 7px;
+    padding: 9px;
+  }
+
+  .more-feature-item .more-icon {
+    width: 31px;
+    height: 31px;
+  }
+}
+
 
 /* ═══════════════════════════════════════════════════════════════
    17. INFO BOX (Generic)

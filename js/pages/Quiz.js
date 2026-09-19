@@ -132,14 +132,22 @@ export async function renderQuiz() {
   allSubjects = [];
   try {
     allSubjects = await getSubjects();
-    for (var i = 0; i < allSubjects.length; i++) {
-      var sub = allSubjects[i];
+    var subjectChapterGroups = await Promise.all(allSubjects.map(async function (sub) {
       var chapters = await getChaptersBySubject(sub.id);
-      for (var j = 0; j < chapters.length; j++) {
-        var ch = chapters[j];
+      return { subject: sub, chapters: chapters };
+    }));
+
+    var questionGroups = await Promise.all(subjectChapterGroups.map(async function (group) {
+      var chapterGroups = await Promise.all(group.chapters.map(async function (ch) {
         var qs = await getQuestionsByChapter(ch.id, "mcq");
-        for (var k = 0; k < qs.length; k++) {
-          var q = qs[k];
+        return { subject: group.subject, chapter: ch, questions: qs };
+      }));
+      return chapterGroups;
+    }));
+
+    questionGroups.forEach(function (chapterGroups) {
+      chapterGroups.forEach(function (group) {
+        group.questions.forEach(function (q) {
           if (q.options && q.options.length > 0 && q.answer) {
             allMcqs.push({
               id: q.id,
@@ -148,15 +156,15 @@ export async function renderQuiz() {
               answer: q.answer,
               explanation: q.explanation || "",
               marks: q.marks || "",
-              subjectId: sub.id,
-              subjectName: sub.name,
-              chapterName: ch.name,
-              chapterNumber: ch.number
+              subjectId: group.subject.id,
+              subjectName: group.subject.name,
+              chapterName: group.chapter.name,
+              chapterNumber: group.chapter.number
             });
           }
-        }
-      }
-    }
+        });
+      });
+    });
   } catch (e) {}
 
   if (allMcqs.length === 0) {

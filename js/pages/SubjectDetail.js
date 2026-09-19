@@ -3,7 +3,7 @@
  */
 
 import { AppShell } from "../components/AppShell.js";
-import { getSubjectById, getChaptersBySubject, getDepartments } from "../services/api.js";
+import { getSubjectById, getChaptersBySubject, getDepartments, recordRecentSubject } from "../services/api.js";
 import { storage, STORAGE_KEYS } from "../core/storage.js";
 import { chapterListSkeleton } from "../utils/skeleton.js";
 import { errorState, emptyState } from "../utils/errorState.js";
@@ -99,6 +99,7 @@ export async function renderSubjectDetail(params = {}) {
   try {
     subject = await getSubjectById(subjectId);
     if (subject) {
+      recordRecentSubject(subjectId).catch(function () {});
       chapters = await getChaptersBySubject(subjectId);
       chapters = chapters.slice().sort(function (a, b) {
         const aSerial = getNumericSerial(a.number);

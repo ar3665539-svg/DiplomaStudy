@@ -9,7 +9,9 @@ import {
   getDepartments,
   getSemestersByDepartment,
   getSubjects,
-  getNotices
+  getNotices,
+  getRecentSubjectsFromServer,
+  recordRecentSubject
 } from "../services/api.js";
 import { homeSkeleton } from "../utils/skeleton.js";
 import { errorState, emptyState } from "../utils/errorState.js";
@@ -185,6 +187,7 @@ function saveRecentSubject(id, name, code, icon) {
     list = list.slice(0, 8);
     localStorage.setItem("diplomastudy_recent_subjects", JSON.stringify(list));
   } catch (e) {}
+  recordRecentSubject(id).catch(function () {});
 }
 
 function getRecentActivity() {
@@ -496,9 +499,15 @@ export async function renderHome(container, params, routeToken) {
 
   var latestNotices = notices.slice(0, 2);
 
-  // ── SERVER-DRIVEN: recent subjects matched against live server data ──
+  // ── SERVER-FIRST: recent subjects come from Supabase when available ──
   var storedRecent = getRecentSubjects();
-  var recentSubjects = storedRecent
+  var serverRecent = [];
+  try {
+    serverRecent = await getRecentSubjectsFromServer(subjects.map(function (s) { return s.id; }));
+  } catch (e) {}
+
+  var recentSource = serverRecent.length > 0 ? serverRecent : storedRecent;
+  var recentSubjects = recentSource
     .map(function (r) {
       var live = subjects.filter(function (s) { return s.id === r.id; })[0];
       if (!live) return null;
