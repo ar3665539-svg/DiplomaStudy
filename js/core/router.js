@@ -12,6 +12,9 @@ let _routeToken = 0;
 export function initRouter(routesMap) {
   routes = routesMap;
   window.addEventListener("hashchange", handleRoute);
+  window.addEventListener("ds:language-change", function () {
+    handleRoute();
+  });
   if (!window.location.hash) {
     window.location.hash = "#/home";
   } else {

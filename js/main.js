@@ -51,6 +51,12 @@ async function boot() {
   var storage = storageMod ? storageMod.storage : null;
   var STORAGE_KEYS = storageMod ? storageMod.STORAGE_KEYS : null;
 
+  try {
+    var savedLanguage = localStorage.getItem("diplomastudy_language") || "mixed";
+    document.documentElement.setAttribute("data-language", savedLanguage);
+    document.documentElement.setAttribute("lang", savedLanguage === "bangla" ? "bn" : "en");
+  } catch (e) {}
+
   var mods = await Promise.all([
     safeImport("./pages/Onboarding.js", "Onboarding"),
     safeImport("./pages/Home.js", "Home"),
@@ -80,7 +86,8 @@ async function boot() {
     safeImport("./pages/Timer.js", "Timer"),
     safeImport("./pages/Tools.js", "Tools"),
     safeImport("./pages/Jobs.js", "Jobs"),
-    safeImport("./pages/AiAssistant.js", "AiAssistant")
+    safeImport("./pages/AiAssistant.js", "AiAssistant"),
+    safeImport("./pages/AiChat.js", "AiChat")
   ]);
 
   var OnboardingMod = mods[0], HomeMod = mods[1], DepartmentsMod = mods[2];
@@ -92,7 +99,7 @@ async function boot() {
   var MoreMod = mods[18], SearchMod = mods[19], SettingsMod = mods[20];
   var BookmarksMod = mods[21], ProgressMod = mods[22], NotesMod = mods[23];
   var PlannerMod = mods[24], TimerMod = mods[25], ToolsMod = mods[26];
-  var JobsMod = mods[27], AiMod = mods[28];
+  var JobsMod = mods[27], AiMod = mods[28], AiChatMod = mods[29];
 
   try {
     AppShell.init();
@@ -140,6 +147,7 @@ async function boot() {
   reg("#/tools",         ToolsMod,          "renderTools",          "Tools",       "");
   reg("#/jobs",          JobsMod,           "renderJobs",           "Jobs",        "");
   reg("#/ai",            AiMod,             "renderAiAssistant",    "AI Tutor",    "");
+  reg("#/ai-chat",       AiMod,             "renderAiAssistant",     "AI Chat",     "Study assistant");
 
   // Fallback for #/more
   var _routeMap = router.routes || router.handlers || {};

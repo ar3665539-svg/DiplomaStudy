@@ -626,6 +626,11 @@ export function renderSettings() {
   bindAll("[data-lang]", function (e, el) {
     var v = el.getAttribute("data-lang");
     safeSet(LANG_KEY, v);
+    try {
+      document.documentElement.setAttribute("lang", v === "bangla" ? "bn" : "en");
+      document.documentElement.setAttribute("data-language", v);
+      window.dispatchEvent(new CustomEvent("ds:language-change", { detail: { language: v } }));
+    } catch (err) {}
     Toast.success("Language: " + v);
     renderSettings();
   });

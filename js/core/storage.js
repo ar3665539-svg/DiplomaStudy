@@ -5,6 +5,7 @@
 export const STORAGE_KEYS = {
   SETTINGS: "diplomastudy_settings",
   THEME: "diplomastudy_theme",
+  LANGUAGE: "diplomastudy_language",
   ONBOARDING_DONE: "diplomastudy_onboarding_done",
   LAST_VISIT: "diplomastudy_last_visit",
   GOAL: "diplomastudy_goal",

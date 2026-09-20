@@ -678,7 +678,7 @@ export async function renderHome(container, params, routeToken) {
       quickBtn(E.pdf,    "PDFs",    "#E0E7FF", "#3730A3", "#/pdfs"),
       quickBtn(E.calc,   "Formula", "#CFFAFE", "#155E75", "#/formulas"),
       quickBtn(E.cal,    "Planner", "#F3E8FF", "#6B21A8", "#/planner"),
-      quickBtn(E.robot,  "AI",      "#FCE7F3", "#9D174D", "#/ai"),
+      quickBtn(E.robot,  "AI",      "#FCE7F3", "#9D174D", "#/ai-chat"),
     '</div>'
   );
 
