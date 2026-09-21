@@ -1,5 +1,5 @@
 /**
- * ContentView v12 - Suggestion empty state updated
+ * ContentView v12 - MCQ tab shows all questions in one scrollable list
  */
 
 import { AppShell } from "../components/AppShell.js";
@@ -20,119 +20,65 @@ import { errorState, emptyState } from "../utils/errorState.js";
 function parseLatex(input) {
   if (!input) return "";
   var s = String(input);
-
   s = s.replace(/\\text\s*\{([^{}]+)\}/g, '$1');
   s = s.replace(/\\mathrm\s*\{([^{}]+)\}/g, '$1');
   s = s.replace(/\\mathbf\s*\{([^{}]+)\}/g, '<strong>$1</strong>');
   s = s.replace(/\\mathit\s*\{([^{}]+)\}/g, '<em>$1</em>');
   s = s.replace(/\\operatorname\s*\{([^{}]+)\}/g, '$1');
-
   s = s.replace(/\\dfrac/g, '\\frac');
   s = s.replace(/\\tfrac/g, '\\frac');
-
   var fracRegex = /\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/;
   var guard = 0;
   while (fracRegex.test(s) && guard < 20) {
     s = s.replace(fracRegex, function (m, num, den) {
-      var numHtml = parseLatexInline(num);
-      var denHtml = parseLatexInline(den);
-      return '<span class="ds-frac"><span class="ds-frac-num">' + numHtml + '</span><span class="ds-frac-den">' + denHtml + '</span></span>';
+      return '<span class="ds-frac"><span class="ds-frac-num">' + parseLatexInline(num) + '</span><span class="ds-frac-den">' + parseLatexInline(den) + '</span></span>';
     });
     guard++;
   }
-
   s = s.replace(/\\sqrt\s*\[([^\]]+)\]\s*\{([^{}]+)\}/g, function (m, n, x) {
     return '<span class="ds-sqrt"><sup style="font-size:0.6em;">' + n + '</sup>&radic;<span class="ds-sqrt-body">' + x + '</span></span>';
   });
   s = s.replace(/\\sqrt\s*\{([^{}]+)\}/g, '<span class="ds-sqrt">&radic;<span class="ds-sqrt-body">$1</span></span>');
-
-  var greek = {
-    alpha:'&alpha;', beta:'&beta;', gamma:'&gamma;', delta:'&delta;',
-    epsilon:'&epsilon;', varepsilon:'&epsilon;', zeta:'&zeta;', eta:'&eta;',
-    theta:'&theta;', vartheta:'&theta;', iota:'&iota;', kappa:'&kappa;',
-    lambda:'&lambda;', mu:'&mu;', nu:'&nu;', xi:'&xi;',
-    pi:'&pi;', varpi:'&pi;', rho:'&rho;', sigma:'&sigma;', tau:'&tau;',
-    upsilon:'&upsilon;', phi:'&phi;', varphi:'&phi;', chi:'&chi;',
-    psi:'&psi;', omega:'&omega;',
-    Gamma:'&Gamma;', Delta:'&Delta;', Theta:'&Theta;', Lambda:'&Lambda;',
-    Xi:'&Xi;', Pi:'&Pi;', Sigma:'&Sigma;', Upsilon:'&Upsilon;',
-    Phi:'&Phi;', Psi:'&Psi;', Omega:'&Omega;'
-  };
+  var greek = { alpha:'&alpha;', beta:'&beta;', gamma:'&gamma;', delta:'&delta;', epsilon:'&epsilon;', varepsilon:'&epsilon;', zeta:'&zeta;', eta:'&eta;', theta:'&theta;', vartheta:'&theta;', iota:'&iota;', kappa:'&kappa;', lambda:'&lambda;', mu:'&mu;', nu:'&nu;', xi:'&xi;', pi:'&pi;', varpi:'&pi;', rho:'&rho;', sigma:'&sigma;', tau:'&tau;', upsilon:'&upsilon;', phi:'&phi;', varphi:'&phi;', chi:'&chi;', psi:'&psi;', omega:'&omega;', Gamma:'&Gamma;', Delta:'&Delta;', Theta:'&Theta;', Lambda:'&Lambda;', Xi:'&Xi;', Pi:'&Pi;', Sigma:'&Sigma;', Upsilon:'&Upsilon;', Phi:'&Phi;', Psi:'&Psi;', Omega:'&Omega;' };
   Object.keys(greek).forEach(function (k) {
     s = s.replace(new RegExp('\\\\' + k + '(?![a-zA-Z])', 'g'), greek[k]);
   });
-
-  var ops = {
-    times:'&times;', div:'&divide;', pm:'&plusmn;', mp:'&#8723;',
-    cdot:'&middot;', ast:'&#8727;', leq:'&le;', geq:'&ge;', neq:'&ne;',
-    approx:'&asymp;', equiv:'&equiv;', propto:'&prop;', infty:'&infin;',
-    partial:'&part;', nabla:'&nabla;', sum:'&sum;', prod:'&prod;',
-    int:'&int;', oint:'&#8750;', to:'&rarr;', rightarrow:'&rarr;',
-    leftarrow:'&larr;', leftrightarrow:'&harr;', Rightarrow:'&rArr;',
-    Leftarrow:'&lArr;', in:'&isin;', notin:'&notin;', subset:'&sub;',
-    supset:'&sup;', cup:'&cup;', cap:'&cap;', emptyset:'&empty;',
-    forall:'&forall;', exists:'&exist;', therefore:'&there4;',
-    because:'&#8757;', circ:'&#8728;', bullet:'&bull;', degree:'&deg;',
-    angle:'&ang;', perp:'&perp;', parallel:'&#8741;', simeq:'&#8771;',
-    sim:'&#8764;', ll:'&laquo;', gg:'&raquo;', le:'&le;', ge:'&ge;',
-    ne:'&ne;', doteq:'&#8784;'
-  };
+  var ops = { times:'&times;', div:'&divide;', pm:'&plusmn;', mp:'&#8723;', cdot:'&middot;', ast:'&#8727;', leq:'&le;', geq:'&ge;', neq:'&ne;', approx:'&asymp;', equiv:'&equiv;', propto:'&prop;', infty:'&infin;', partial:'&part;', nabla:'&nabla;', sum:'&sum;', prod:'&prod;', int:'&int;', oint:'&#8750;', to:'&rarr;', rightarrow:'&rarr;', leftarrow:'&larr;', leftrightarrow:'&harr;', Rightarrow:'&rArr;', Leftarrow:'&lArr;', in:'&isin;', notin:'&notin;', subset:'&sub;', supset:'&sup;', cup:'&cup;', cap:'&cap;', emptyset:'&empty;', forall:'&forall;', exists:'&exist;', therefore:'&there4;', because:'&#8757;', circ:'&#8728;', bullet:'&bull;', degree:'&deg;', angle:'&ang;', perp:'&perp;', parallel:'&#8741;', simeq:'&#8771;', sim:'&#8764;', ll:'&laquo;', gg:'&raquo;', le:'&le;', ge:'&ge;', ne:'&ne;', doteq:'&#8784;' };
   Object.keys(ops).forEach(function (k) {
     s = s.replace(new RegExp('\\\\' + k + '(?![a-zA-Z])', 'g'), ops[k]);
   });
-
-  var funcs = ['sin','cos','tan','cot','sec','csc','log','ln','exp','lim',
-               'max','min','arg','det','dim','mod','bmod','arcsin','arccos',
-               'arctan','sinh','cosh','tanh'];
+  var funcs = ['sin','cos','tan','cot','sec','csc','log','ln','exp','lim','max','min','arg','det','dim','mod','bmod','arcsin','arccos','arctan','sinh','cosh','tanh'];
   funcs.forEach(function (f) {
     s = s.replace(new RegExp('\\\\' + f + '(?![a-zA-Z])', 'g'), f);
   });
-
-  s = s.replace(/\\left/g, '');
-  s = s.replace(/\\right/g, '');
-
+  s = s.replace(/\\left/g, '').replace(/\\right/g, '');
   s = s.replace(/\^\{([^{}]+)\}/g, '<sup class="ds-sup">$1</sup>');
   s = s.replace(/\^([0-9a-zA-Z+\-])/g, '<sup class="ds-sup">$1</sup>');
-
   s = s.replace(/_\{([^{}]+)\}/g, '<sub class="ds-sub">$1</sub>');
   s = s.replace(/_([0-9a-zA-Z+\-])/g, '<sub class="ds-sub">$1</sub>');
-
   s = s.replace(/\\\\/g, '<br>');
-
   s = s.replace(/\\([a-zA-Z]+)/g, '$1');
-
-  s = s.replace(/\\\{/g, '{');
-  s = s.replace(/\\\}/g, '}');
-
+  s = s.replace(/\\\{/g, '{').replace(/\\\}/g, '}');
   return s;
 }
-
 function parseLatexInline(input) {
   if (!input) return "";
   var s = String(input);
-  s = s.replace(/\\alpha/g, '&alpha;').replace(/\\beta/g, '&beta;')
-       .replace(/\\gamma/g, '&gamma;').replace(/\\delta/g, '&delta;')
-       .replace(/\\pi/g, '&pi;').replace(/\\theta/g, '&theta;')
-       .replace(/\\lambda/g, '&lambda;').replace(/\\mu/g, '&mu;')
-       .replace(/\\omega/g, '&omega;');
+  s = s.replace(/\\alpha/g, '&alpha;').replace(/\\beta/g, '&beta;').replace(/\\gamma/g, '&gamma;').replace(/\\delta/g, '&delta;').replace(/\\pi/g, '&pi;').replace(/\\theta/g, '&theta;').replace(/\\lambda/g, '&lambda;').replace(/\\mu/g, '&mu;').replace(/\\omega/g, '&omega;');
   s = s.replace(/\^\{([^{}]+)\}/g, '<sup class="ds-sup">$1</sup>');
   s = s.replace(/\^([0-9a-zA-Z+\-])/g, '<sup class="ds-sup">$1</sup>');
   s = s.replace(/_\{([^{}]+)\}/g, '<sub class="ds-sub">$1</sub>');
   s = s.replace(/_([0-9a-zA-Z+\-])/g, '<sub class="ds-sub">$1</sub>');
   return s;
 }
-
 function formatLatex(input) {
   if (input == null) return "";
   var s = String(input);
   s = s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   s = s.replace(/\r\n/g, '\n').replace(/\n/g, '<br>');
-  if (/\\[a-zA-Z]/.test(s) || /\^\{|_\{/.test(s)) {
-    s = parseLatex(s);
-  }
+  if (/\\[a-zA-Z]/.test(s) || /\^\{|_\{/.test(s)) s = parseLatex(s);
   return s;
 }
-
 function ensureStyles() {
   if (document.getElementById("ds-latex-style")) return;
   var style = document.createElement("style");
@@ -144,8 +90,7 @@ function ensureStyles() {
     ".ds-sqrt{white-space:nowrap;display:inline-block;}" +
     ".ds-sqrt-body{border-top:1.5px solid currentColor;padding:3px 5px 0;margin-left:-2px;}" +
     ".ds-sup{font-size:0.72em;vertical-align:super;line-height:0;}" +
-    ".ds-sub{font-size:0.72em;vertical-align:sub;line-height:0;}" +
-    "html,body{overscroll-behavior-y:contain;overscroll-behavior-x:none;}";
+    ".ds-sub{font-size:0.72em;vertical-align:sub;line-height:0;}";
   document.head.appendChild(style);
 }
 
@@ -159,7 +104,7 @@ var TABS = [
 ];
 
 var _lastChapterId = null;
-var _qIndex = { creative: 0, short: 0, mcq: 0 };
+var _qIndex = { creative: 0, short: 0 };
 var _lastTab = "pdf";
 
 export async function renderContentView(params = {}) {
@@ -239,7 +184,7 @@ export async function renderContentView(params = {}) {
   });
 
   if (_lastChapterId !== chapterId) {
-    _qIndex = { creative: 0, short: 0, mcq: 0 };
+    _qIndex = { creative: 0, short: 0 };
     _lastChapterId = chapterId;
   }
   _lastTab = initialTab;
@@ -322,14 +267,14 @@ export async function renderContentView(params = {}) {
 function bindForTab(main, tabId, data) {
   if (tabId === "creative") bindQuestionViewer(main, data.creative, "creative");
   else if (tabId === "short") bindQuestionViewer(main, data.short, "short");
-  else if (tabId === "mcq") bindQuestionViewer(main, data.mcq, "mcq");
+  // mcq: no binding needed — it's a simple list
 }
 
 function renderTab(tabId, data) {
   if (tabId === "pdf") return renderPdfs(data.pdfs);
   if (tabId === "creative") return renderQuestions(data.creative, "creative");
   if (tabId === "short") return renderQuestions(data.short, "short");
-  if (tabId === "mcq") return renderQuestions(data.mcq, "mcq");
+  if (tabId === "mcq") return renderMcqList(data.mcq);
   if (tabId === "suggestion") return renderSuggestions(data.suggestions);
   if (tabId === "formula") return renderFormulas(data.formulas);
   return "";
@@ -354,6 +299,88 @@ function renderPdfs(pdfs) {
   '</div>';
 }
 
+// ═══════════════════════════════════════════
+// MCQ LIST — all questions on one page
+// ═══════════════════════════════════════════
+function renderMcqList(questions) {
+  if (!questions || questions.length === 0) {
+    return emptyState({
+      icon: "\u2753",
+      title: "\u0995\u09CB\u09A8\u09CB \u09AA\u09CD\u09B0\u09B6\u09CD\u09A8 \u09A8\u09C7\u0987",
+      message: "\u098F\u0987 chapter-\u098F \u098F\u0996\u09A8\u09CB \u0985\u09A4\u09BF \u09B8\u0982\u0995\u09CD\u09B7\u09BF\u09AA\u09CD\u09A4 \u09AA\u09CD\u09B0\u09B6\u09CD\u09A8 \u09AF\u09CB\u0997 \u0995\u09B0\u09BE \u09B9\u09AF\u09BC\u09A8\u09BF\u0964"
+    });
+  }
+
+  var total = questions.length;
+
+  var headerBar =
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#FFFFFF;border:1px solid #E1E8E1;border-radius:12px;margin-bottom:12px;">' +
+      '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<span style="width:28px;height:28px;border-radius:8px;background:#E0E7FF;color:#3730A3;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;">\u26A1</span>' +
+        '<span style="font-size:13px;font-weight:800;color:#1C3E2C;">\u0985\u09A4\u09BF \u09B8\u0982\u0995\u09CD\u09B7\u09BF\u09AA\u09CD\u09A4 \u09AA\u09CD\u09B0\u09B6\u09CD\u09A8</span>' +
+      '</div>' +
+      '<span style="font-size:11.5px;font-weight:900;color:#3730A3;background:#E0E7FF;padding:4px 10px;border-radius:999px;">' + total + '</span>' +
+    '</div>';
+
+  var cards = questions.map(function (q, idx) {
+    var numberBadge =
+      '<span style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#1C3E2C,#2A5540);color:#FFFFFF;display:inline-flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:800;font-family:ui-monospace,monospace;flex-shrink:0;">' + (idx + 1) + '</span>';
+
+    var marksBadge = q.marks
+      ? '<span style="font-size:9.5px;font-weight:800;color:#92400E;background:#FEF3C7;padding:3px 8px;border-radius:5px;">\uD83C\uDFAF ' + escapeHtml(q.marks) + '</span>'
+      : "";
+
+    var boardBadge = q.board
+      ? '<span style="font-size:9.5px;font-weight:800;color:#065F46;background:#DCFCE7;padding:3px 8px;border-radius:5px;">' + escapeHtml(q.board) + '</span>'
+      : "";
+
+    // If MCQ has options: show them with correct one highlighted
+    var bodyHtml = "";
+    if (q.options && q.options.length > 0) {
+      bodyHtml = '<div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">' +
+        q.options.map(function (opt, i) {
+          var letter = String.fromCharCode(65 + i);
+          var isCorrect = opt === q.answer;
+          var optionBg = isCorrect ? "#DCFCE7" : "#F8FBF8";
+          var optionBorder = isCorrect ? "#10B981" : "#E1E8E1";
+          var letterBg = isCorrect ? "#10B981" : "#F2F5F2";
+          var letterFg = isCorrect ? "#FFFFFF" : "#57675D";
+          var optionTextColor = isCorrect ? "#065F46" : "#1C3E2C";
+
+          return '<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;background:' + optionBg + ';border:1px solid ' + optionBorder + ';border-radius:10px;">' +
+            '<span style="width:22px;height:22px;border-radius:7px;background:' + letterBg + ';color:' + letterFg + ';display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;font-family:ui-monospace,monospace;flex-shrink:0;margin-top:1px;">' + letter + '</span>' +
+            '<span style="flex:1;font-size:13px;font-weight:600;color:' + optionTextColor + ';line-height:1.5;">' + formatLatex(opt) + '</span>' +
+            (isCorrect ? '<span style="color:#10B981;font-size:15px;font-weight:800;flex-shrink:0;">\u2713</span>' : "") +
+          '</div>';
+        }).join("") +
+      '</div>';
+    } else if (q.answer) {
+      // No options: show the answer as text
+      bodyHtml = '<div style="margin-top:10px;padding:10px 12px;background:#F8FBF8;border-left:3px solid #1C3E2C;border-radius:8px;">' +
+        '<div style="font-size:10px;font-weight:800;color:#84968B;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:5px;">\u0989\u09A4\u09CD\u09A4\u09B0</div>' +
+        '<div style="font-size:13.5px;font-weight:500;color:#1C3E2C;line-height:1.7;">' + formatLatex(q.answer) + '</div>' +
+      '</div>';
+    }
+
+    return '<div class="mcq-item" style="padding:14px;background:#FFFFFF;border:1px solid #E1E8E1;border-radius:14px;">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">' +
+        '<div style="display:flex;align-items:center;gap:6px;">' +
+          numberBadge +
+          boardBadge +
+        '</div>' +
+        marksBadge +
+      '</div>' +
+      '<div style="font-size:14px;font-weight:700;color:#1C3E2C;line-height:1.55;">' + formatLatex(q.question || "") + '</div>' +
+      bodyHtml +
+    '</div>';
+  }).join("");
+
+  return headerBar + '<div style="display:flex;flex-direction:column;gap:12px;">' + cards + '</div>';
+}
+
+// ═══════════════════════════════════════════
+// QUESTIONS (slide view for creative/short)
+// ═══════════════════════════════════════════
 function renderQuestions(questions, type) {
   if (!questions || questions.length === 0) {
     return emptyState({ icon: "\u2753", title: "\u0995\u09CB\u09A8\u09CB \u09AA\u09CD\u09B0\u09B6\u09CD\u09A8 \u09A8\u09C7\u0987", message: "\u098F\u0987 \u09A7\u09B0\u09A8\u09C7\u09B0 \u09AA\u09CD\u09B0\u09B6\u09CD\u09A8 \u098F\u0996\u09A8\u09CB \u09AF\u09CB\u0997 \u0995\u09B0\u09BE \u09B9\u09AF\u09BC\u09A8\u09BF\u0964" });
@@ -413,24 +440,10 @@ function renderSingleQuestion(q, idx, type) {
   html += '<div style="font-size:14px;font-weight:700;color:#1C3E2C;line-height:1.55;">' + formatLatex(q.question || "") + '</div>';
   html += '</div>';
 
-  if (type === "mcq" && q.options && q.options.length > 0) {
-    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
-    q.options.forEach(function (opt, i) {
-      var letter = String.fromCharCode(65 + i);
-      var isCorrect = opt === q.answer;
-      html += '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:' + (isCorrect ? "#DCFCE7" : "#FFFFFF") + ';border:1px solid ' + (isCorrect ? "#10B981" : "#E1E8E1") + ';border-radius:10px;">' +
-        '<span style="width:22px;height:22px;border-radius:7px;background:' + (isCorrect ? "#10B981" : "#F2F5F2") + ';color:' + (isCorrect ? "#FFFFFF" : "#57675D") + ';font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:ui-monospace,monospace;flex-shrink:0;">' + letter + '</span>' +
-        '<span style="flex:1;font-size:13px;font-weight:600;color:#1C3E2C;line-height:1.5;">' + formatLatex(opt) + '</span>' +
-        (isCorrect ? '<span style="color:#10B981;font-size:15px;font-weight:800;">\u2713</span>' : "") +
-      '</div>';
-    });
-    html += '</div>';
-  } else {
-    html += '<div style="padding:10px 12px;border:1px solid #E1E8E1;border-radius:10px;">';
-    html += '<div style="font-size:10px;font-weight:800;color:#84968B;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:5px;">\u0989\u09A4\u09CD\u09A4\u09B0</div>';
-    html += '<div style="font-size:14px;font-weight:500;color:#1C3E2C;line-height:1.7;">' + formatLatex(q.answer || "") + '</div>';
-    html += '</div>';
-  }
+  html += '<div style="padding:10px 12px;border:1px solid #E1E8E1;border-radius:10px;">';
+  html += '<div style="font-size:10px;font-weight:800;color:#84968B;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:5px;">\u0989\u09A4\u09CD\u09A4\u09B0</div>';
+  html += '<div style="font-size:14px;font-weight:500;color:#1C3E2C;line-height:1.7;">' + formatLatex(q.answer || "") + '</div>';
+  html += '</div>';
 
   html += '</div>';
   return html;
@@ -599,9 +612,6 @@ function showQNavigator(questions, currentIdx, type, goTo) {
   });
 }
 
-// ═══════════════════════════════════════════
-// SUGGESTIONS - Empty state shows exam notice
-// ═══════════════════════════════════════════
 function renderSuggestions(suggestions) {
   if (!suggestions || suggestions.length === 0) {
     return '<div style="text-align:center;padding:50px 24px;background:#FFFBEB;border:1.5px dashed #FCD34D;border-radius:16px;">' +

@@ -1,5 +1,5 @@
 /**
- * Home v11 - Unlocked quick actions + server-driven Continue Learning
+ * Home v14.1 - Fixed AI route (#/ai)
  */
 
 import { AppShell } from "../components/AppShell.js";
@@ -19,14 +19,8 @@ import { attachPullToRefresh } from "../utils/pullToRefresh.js";
 import { Toast } from "../components/Toast.js";
 import { isOnline, onConnectionChange } from "../utils/apiWrapper.js";
 
-// ═══════════════════════════════════════════
-// CLEANUP TRACKER
-// ═══════════════════════════════════════════
 var currentCleanup = null;
 
-// ═══════════════════════════════════════════
-// BENGALI TEXT
-// ═══════════════════════════════════════════
 var T = {
   morning:   "\u09B6\u09C1\u09AD \u09B8\u0995\u09BE\u09B2",
   noon:      "\u09B6\u09C1\u09AD \u09A6\u09C1\u09AA\u09C1\u09B0",
@@ -77,31 +71,103 @@ var E = {
   check:  "\u2705"
 };
 
-var TIPS = [
-  "Daily 25 minutes = 12 hours a month. Stay consistent.",
-  "Write key formulas on a card. Review before each class.",
-  "Teach a friend - you remember 90% of what you teach.",
-  "Solve previous year questions. Patterns repeat.",
-  "Take a 5 minute break every 25 minutes. Focus stays sharp.",
-  "Sleep 7-8 hours. Memory forms during sleep.",
-  "Revise within 24 hours. Then after 7 days. Then after 30."
+var QUOTES = [
+  "প্রতিদিন ছোট ছোট পদক্ষেপ বড় সফলতা আনে।",
+  "আজ যা শিখবে, কাল সেটাই তোমার শক্তি।",
+  "পরিশ্রমের কোনো বিকল্প নেই।",
+  "সফলতা রাতারাতি আসে না।",
+  "পড়াশোনার সেরা সময় এখনই।",
+  "নিজের উপর বিশ্বাস রাখো।",
+  "আজকের কষ্ট কালকের সাফল্য।",
+  "যারা হারে না, তারাই জেতে।",
+  "ছোট ছোট জয়ই বড় জয়ের সিঁড়ি।",
+  "জ্ঞানই প্রকৃত সম্পদ।",
+  "মন দিয়ে পড়লে কিছুই কঠিন নয়।",
+  "প্রতিদিন এক পা এগোলেও একদিন লক্ষ্যে পৌঁছাবে।",
+  "অনুপ্রেরণা নয়, অভ্যাসই সাফল্য আনে।",
+  "তোমার ভবিষ্যৎ আজকের পড়াশোনায় লেখা।",
+  "যে পড়ে, সে জানে। যে জানে, সে পারে।",
+  "ভয় নয়, সাহস নিয়ে এগিয়ে যাও।",
+  "একটা অধ্যায় ভালোভাবে পড়া, দশটা আধাপড়ার চেয়ে ভালো।",
+  "আজকের ত্যাগ কালকের সাফল্য।",
+  "যেখানে ইচ্ছা, সেখানে উপায়।",
+  "কষ্ট করলে ফল পাবেই।",
+  "প্রতিদিন নতুন কিছু শেখার চেষ্টা করো।",
+  "সময়ের মূল্য বোঝো, কারণ সময় ফিরে আসে না।",
+  "তোমার চেষ্টাই তোমার পরিচয়।",
+  "লক্ষ্য স্থির রাখো, পথ আপনি খুঁজে পাবে।",
+  "হেরে গেলে হতাশ হয়ো না, শেখো।",
+  "একাগ্রতা অর্ধেক সাফল্য।",
+  "প্রতিটি সকাল নতুন সুযোগ।",
+  "আজকের পড়াশোনাই তোমার কালকের ভিত্তি।",
+  "সাধনা ছাড়া সফলতা অসম্ভব।",
+  "প্রতিটা ভুল একটা শিক্ষা।",
+  "সংকল্প থাকলে পাহাড়ও ডিঙানো যায়।",
+  "সময় নষ্ট করলে সময় তোমাকে নষ্ট করবে।",
+  "কঠোর পরিশ্রমেই সৌভাগ্য তৈরি হয়।",
+  "নিজের উপর দৃঢ় বিশ্বাস রাখো।",
+  "সফলতার কোনো শর্টকাট নেই।",
+  "ভবিষ্যতের তুমি আজকের তোমার কাছে কৃতজ্ঞ থাকবে।",
+  "একটি বই একটি বন্ধু।",
+  "যত পড়বে, তত জানবে। যত জানবে, তত এগিয়ে যাবে।",
+  "আলস্য সফলতার সবচেয়ে বড় শত্রু।",
+  "আজকের পরিশ্রম, কালকের বিজয়।"
 ];
 
-var QUOTES = [
-  "Small steps every day lead to big results.",
-  "The expert in anything was once a beginner.",
-  "Discipline beats motivation. Show up daily.",
-  "Your future is created by what you do today.",
-  "Focus on progress, not perfection.",
-  "One chapter today is better than ten tomorrow.",
-  "Hard work today, success tomorrow."
+var TIPS = [
+  "প্রতিদিন ২৫ মিনিট পড়লে মাসে ১২ ঘণ্টা হয়।",
+  "কঠিন বিষয় সকালে পড়ুন, মন সতেজ থাকে।",
+  "সূত্রগুলো কার্ডে লিখে রাখুন, বারবার দেখুন।",
+  "প্রতি ২৫ মিনিট পড়ার পর ৫ মিনিট বিশ্রাম নিন।",
+  "বন্ধুকে বুঝিয়ে বললে ৯০% মনে থাকে।",
+  "পরীক্ষার আগের রাতে না পড়ে, আগেই ভালোভাবে পড়ুন।",
+  "দিনে ৭-৮ ঘণ্টা ঘুমান — মস্তিষ্ক স্মৃতি গঠন করে।",
+  "একই অধ্যায় ২৪ ঘণ্টার মধ্যে রিভিশন দিন।",
+  "ছবি বা ডায়াগ্রাম এঁকে পড়ুন — মনে রাখা সহজ হয়।",
+  "কেবল পড়বেন না, নিজেই প্রশ্ন বানিয়ে উত্তর দিন।",
+  "একসাথে অনেক বিষয় পড়বেন না — একটা একটা করে।",
+  "হাতের লেখায় নোট করুন — টাইপ করার চেয়ে ভালো মনে থাকে।",
+  "প্রতিদিন একঘণ্টা মনোযোগ দিয়ে পড়া, চারঘণ্টা এলোমেলো পড়ার চেয়ে ভালো।",
+  "মোবাইল দূরে রাখুন পড়ার সময়।",
+  "যেটা বুঝতে পারছেন না, সাথে সাথে লিখে রাখুন।",
+  "বড় টপিক ছোট ছোট অংশে ভাগ করুন।",
+  "প্রতিদিন এক নতুন সূত্র শিখুন।",
+  "রাতে ঘুমানোর আগে যা শিখেছেন তা রিভিশন দিন।",
+  "জল খান পড়ার সময় — মস্তিষ্ক সক্রিয় থাকে।",
+  "প্রতিদিন ২০ মিনিট ব্যায়াম করুন।",
+  "সকালের নাস্তা বাদ দেবেন না।",
+  "পড়ার ঘরে আলো ভালো থাকুক।",
+  "প্রতিদিন একই জায়গায় পড়ুন — অভ্যাস তৈরি হয়।",
+  "গত বছরের প্রশ্ন সমাধান করুন।",
+  "প্রশ্ন পড়ার পর উত্তর ভাবুন — তারপর বইয়ের সাথে মিলিয়ে নিন।",
+  "প্রতি সপ্তাহে নিজেই একটা পরীক্ষা দিন।",
+  "ভুলের খাতা রাখুন, প্রতি সপ্তাহে রিভিশন দিন।",
+  "সহজ প্রশ্ন আগে করুন, আত্মবিশ্বাস বাড়ে।",
+  "কঠিন প্রশ্ন সবচেয়ে সতেজ মাথায় করুন।",
+  "নোট রঙিন কলম দিয়ে লিখুন।",
+  "মাইন্ড ম্যাপ বানিয়ে পড়ুন।",
+  "প্রতিটা অধ্যায়ের শেষে সারসংক্ষেপ লিখুন।",
+  "গণিত হাতে-কলমে করুন, শুধু দেখে যাবেন না।",
+  "নিজের ভাষায় লিখুন, বইয়ের হুবহু নকল না।",
+  "টাইমার দিয়ে পড়ুন — সময় নষ্ট হবে না।",
+  "টেবিলে শুধু পড়ার বই রাখুন।",
+  "বন্ধুর সাথে আলোচনা করুন কঠিন টপিক।",
+  "প্রতিদিনের পড়ার হিসাব রাখুন।",
+  "নিজেকে ছোট ছোট পুরস্কার দিন।",
+  "ফর্মুলা ডায়েরি বানান।",
+  "পরীক্ষার আগে নোটের বাইরে কিছু নতুন পড়বেন না।",
+  "পরীক্ষায় উত্তর দেওয়ার আগে দুইবার প্রশ্ন পড়ুন।",
+  "ডায়াগ্রাম পরিষ্কারভাবে আঁকুন।",
+  "সময় ভাগ করে লেখা অভ্যাস করুন।"
 ];
+
+function randomItem(arr) {
+  if (!arr || arr.length === 0) return "";
+  return arr[Math.floor(Math.random() * arr.length)];
+}
 
 var WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 
-// ═══════════════════════════════════════════
-// STORAGE HELPERS
-// ═══════════════════════════════════════════
 function getStudyProgress() {
   try {
     var today = new Date().toISOString().slice(0, 10);
@@ -171,7 +237,6 @@ function saveTodayMinutes(minutes) {
   } catch (e) {}
 }
 
-// ── Recent subjects (source of truth for "Continue Learning") ──
 function getRecentSubjects() {
   try {
     var raw = localStorage.getItem("diplomastudy_recent_subjects");
@@ -187,7 +252,7 @@ function saveRecentSubject(id, name, code, icon) {
     list = list.slice(0, 8);
     localStorage.setItem("diplomastudy_recent_subjects", JSON.stringify(list));
   } catch (e) {}
-  recordRecentSubject(id).catch(function () {});
+  try { recordRecentSubject(id).catch(function () {}); } catch (e) {}
 }
 
 function getRecentActivity() {
@@ -224,9 +289,6 @@ function markMilestoneSeen(n) {
   try { localStorage.setItem("diplomastudy_seen_milestone", String(n)); } catch (e) {}
 }
 
-// ═══════════════════════════════════════════
-// MODALS
-// ═══════════════════════════════════════════
 function showInlineModal(title, message) {
   var old = document.getElementById("ds-inline-modal");
   if (old) old.remove();
@@ -234,10 +296,10 @@ function showInlineModal(title, message) {
   overlay.id = "ds-inline-modal";
   overlay.style.cssText = "position:fixed;inset:0;background:rgba(15,23,42,0.7);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;";
   overlay.innerHTML =
-    '<div style="background:#FFFFFF;border-radius:20px;padding:24px;max-width:340px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">' +
+    '<div style="background:var(--color-surface,#FFFFFF);border-radius:20px;padding:24px;max-width:340px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">' +
       '<div style="font-size:48px;margin-bottom:12px;">&#128679;</div>' +
-      '<h3 style="font-size:17px;font-weight:800;color:#1C3E2C;margin:0 0 8px;">' + escapeHtml(title || "Coming Soon") + '</h3>' +
-      '<p style="font-size:13px;color:#84968B;line-height:1.5;margin:0 0 18px;">' + escapeHtml(message || "This feature is coming soon.") + '</p>' +
+      '<h3 style="font-size:17px;font-weight:800;color:var(--color-text,#1C3E2C);margin:0 0 8px;">' + escapeHtml(title || "Coming Soon") + '</h3>' +
+      '<p style="font-size:13px;color:var(--color-text-muted,#84968B);line-height:1.5;margin:0 0 18px;">' + escapeHtml(message || "This feature is coming soon.") + '</p>' +
       '<button data-close style="width:100%;padding:12px;border-radius:12px;border:none;background:linear-gradient(135deg,#1C3E2C,#2A5540);color:#FFFFFF;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;">OK</button>' +
     '</div>';
   document.body.appendChild(overlay);
@@ -276,8 +338,8 @@ async function showDeptSemPicker(currentDeptId, currentSemId) {
   overlay.id = "ds-picker";
   overlay.style.cssText = "position:fixed;inset:0;background:rgba(15,23,42,0.75);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:flex-end;justify-content:center;";
   overlay.innerHTML =
-    '<div style="background:#FFFFFF;width:100%;max-width:520px;border-radius:24px 24px 0 0;padding:24px;max-height:85vh;overflow-y:auto;box-shadow:0 -12px 40px rgba(0,0,0,0.3);">' +
-      '<div style="width:40px;height:4px;background:#E1E8E1;border-radius:999px;margin:0 auto 20px;"></div>' +
+    '<div style="background:var(--color-surface,#FFFFFF);width:100%;max-width:520px;border-radius:24px 24px 0 0;padding:24px;max-height:85vh;overflow-y:auto;box-shadow:0 -12px 40px rgba(0,0,0,0.3);">' +
+      '<div style="width:40px;height:4px;background:var(--color-border,#E1E8E1);border-radius:999px;margin:0 auto 20px;"></div>' +
       '<div style="text-align:center;padding:40px 20px;"><div class="spinner"></div></div>' +
     '</div>';
   document.body.appendChild(overlay);
@@ -291,24 +353,24 @@ async function showDeptSemPicker(currentDeptId, currentSemId) {
     overlay.querySelector("div").innerHTML =
       '<div style="text-align:center;padding:40px 20px;">' +
         '<div style="font-size:56px;margin-bottom:12px;">' + E.dept + '</div>' +
-        '<h3 style="font-size:16px;font-weight:800;color:#1C3E2C;margin:0 0 8px;">' + T.noDept + '</h3>' +
+        '<h3 style="font-size:16px;font-weight:800;color:var(--color-text,#1C3E2C);margin:0 0 8px;">' + T.noDept + '</h3>' +
       '</div>';
     return;
   }
 
   var modal = overlay.querySelector("div");
   modal.innerHTML =
-    '<div style="width:40px;height:4px;background:#E1E8E1;border-radius:999px;margin:0 auto 16px;"></div>' +
+    '<div style="width:40px;height:4px;background:var(--color-border,#E1E8E1);border-radius:999px;margin:0 auto 16px;"></div>' +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
-      '<h3 style="font-size:17px;font-weight:900;color:#1C3E2C;margin:0;">Department &amp; Semester</h3>' +
-      '<button data-close style="width:32px;height:32px;border-radius:10px;background:#F2F5F2;border:none;color:#57675D;font-size:14px;cursor:pointer;font-family:inherit;">X</button>' +
+      '<h3 style="font-size:17px;font-weight:900;color:var(--color-text,#1C3E2C);margin:0;">Department &amp; Semester</h3>' +
+      '<button data-close style="width:32px;height:32px;border-radius:10px;background:var(--color-surface-hover,#F2F5F2);border:none;color:var(--color-text-muted,#57675D);font-size:14px;cursor:pointer;font-family:inherit;">X</button>' +
     '</div>' +
     '<div id="step-dept">' +
-      '<div style="font-size:11px;font-weight:800;color:#84968B;letter-spacing:0.8px;margin-bottom:10px;">1. SELECT DEPARTMENT</div>' +
+      '<div style="font-size:11px;font-weight:800;color:var(--color-text-dim,#84968B);letter-spacing:0.8px;margin-bottom:10px;">1. SELECT DEPARTMENT</div>' +
       '<div id="dept-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;"></div>' +
     '</div>' +
     '<div id="step-sem" style="display:none;">' +
-      '<div style="font-size:11px;font-weight:800;color:#84968B;letter-spacing:0.8px;margin-bottom:10px;">2. SELECT SEMESTER</div>' +
+      '<div style="font-size:11px;font-weight:800;color:var(--color-text-dim,#84968B);letter-spacing:0.8px;margin-bottom:10px;">2. SELECT SEMESTER</div>' +
       '<div id="sem-list" style="display:flex;flex-direction:column;gap:8px;"></div>' +
     '</div>';
   modal.querySelector("[data-close]").onclick = close;
@@ -317,11 +379,11 @@ async function showDeptSemPicker(currentDeptId, currentSemId) {
 
   function renderDepartments() {
     deptList.innerHTML = departments.map(function (d) {
-      return '<button class="dept-opt" data-dept-id="' + d.id + '" style="display:flex;align-items:center;gap:12px;padding:14px;background:' + (d.id === currentDeptId ? "#DCFCE7" : "#F8FBF8") + ';border:1.5px solid ' + (d.id === currentDeptId ? "#10B981" : "#E1E8E1") + ';border-radius:14px;cursor:pointer;font-family:inherit;text-align:left;width:100%;">' +
-        '<div style="width:44px;height:44px;border-radius:13px;background:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">' + (d.icon || E.dept) + '</div>' +
+      return '<button class="dept-opt" data-dept-id="' + d.id + '" style="display:flex;align-items:center;gap:12px;padding:14px;background:' + (d.id === currentDeptId ? "rgba(16,185,129,0.15)" : "var(--color-surface-hover,#F8FBF8)") + ';border:1.5px solid ' + (d.id === currentDeptId ? "#10B981" : "var(--color-border,#E1E8E1)") + ';border-radius:14px;cursor:pointer;font-family:inherit;text-align:left;width:100%;">' +
+        '<div style="width:44px;height:44px;border-radius:13px;background:var(--color-surface,#FFFFFF);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">' + (d.icon || E.dept) + '</div>' +
         '<div style="flex:1;min-width:0;">' +
-          '<div style="font-size:13.5px;font-weight:800;color:#1C3E2C;margin-bottom:2px;">' + escapeHtml(d.name) + '</div>' +
-          (d.banglaName ? '<div style="font-size:11px;color:#84968B;font-weight:600;">' + escapeHtml(d.banglaName) + '</div>' : "") +
+          '<div style="font-size:13.5px;font-weight:800;color:var(--color-text,#1C3E2C);margin-bottom:2px;">' + escapeHtml(d.name) + '</div>' +
+          (d.banglaName ? '<div style="font-size:11px;color:var(--color-text-dim,#84968B);font-weight:600;">' + escapeHtml(d.banglaName) + '</div>' : "") +
         '</div>' +
       '</button>';
     }).join("");
@@ -335,8 +397,8 @@ async function showDeptSemPicker(currentDeptId, currentSemId) {
     var semList = modal.querySelector("#sem-list");
     deptList.querySelectorAll(".dept-opt").forEach(function (btn) {
       var isThis = btn.getAttribute("data-dept-id") === deptId;
-      btn.style.background = isThis ? "#DCFCE7" : "#F8FBF8";
-      btn.style.borderColor = isThis ? "#10B981" : "#E1E8E1";
+      btn.style.background = isThis ? "rgba(16,185,129,0.15)" : "var(--color-surface-hover,#F8FBF8)";
+      btn.style.borderColor = isThis ? "#10B981" : "var(--color-border,#E1E8E1)";
     });
     stepSem.style.display = "block";
     semList.innerHTML = '<div style="text-align:center;padding:24px;"><div class="spinner" style="margin:0 auto;"></div></div>';
@@ -345,16 +407,16 @@ async function showDeptSemPicker(currentDeptId, currentSemId) {
     try { semesters = await getSemestersByDepartment(deptId); } catch (e) {}
 
     if (semesters.length === 0) {
-      semList.innerHTML = '<div style="padding:24px 16px;text-align:center;background:#FEF3C7;border:1.5px dashed #FCD34D;border-radius:14px;font-size:13px;font-weight:800;color:#92400E;">No Semesters</div>';
+      semList.innerHTML = '<div style="padding:24px 16px;text-align:center;background:rgba(245,158,11,0.15);border:1.5px dashed #FCD34D;border-radius:14px;font-size:13px;font-weight:800;color:#92400E;">No Semesters</div>';
       return;
     }
 
     semList.innerHTML = semesters.map(function (s) {
-      return '<button class="sem-opt" data-sem-id="' + s.id + '" data-sem-num="' + s.number + '" style="display:flex;align-items:center;gap:12px;padding:14px;background:' + (s.id === currentSemId ? "#DCFCE7" : "#F8FBF8") + ';border:1.5px solid ' + (s.id === currentSemId ? "#10B981" : "#E1E8E1") + ';border-radius:14px;cursor:pointer;font-family:inherit;text-align:left;width:100%;">' +
-        '<div style="width:44px;height:44px;border-radius:13px;background:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">' + (s.icon || E.cal) + '</div>' +
+      return '<button class="sem-opt" data-sem-id="' + s.id + '" data-sem-num="' + s.number + '" style="display:flex;align-items:center;gap:12px;padding:14px;background:' + (s.id === currentSemId ? "rgba(16,185,129,0.15)" : "var(--color-surface-hover,#F8FBF8)") + ';border:1.5px solid ' + (s.id === currentSemId ? "#10B981" : "var(--color-border,#E1E8E1)") + ';border-radius:14px;cursor:pointer;font-family:inherit;text-align:left;width:100%;">' +
+        '<div style="width:44px;height:44px;border-radius:13px;background:var(--color-surface,#FFFFFF);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">' + (s.icon || E.cal) + '</div>' +
         '<div style="flex:1;min-width:0;">' +
-          '<div style="font-size:13.5px;font-weight:800;color:#1C3E2C;margin-bottom:2px;">' + escapeHtml(s.name) + '</div>' +
-          '<div style="font-size:11px;color:#84968B;font-weight:600;">Semester ' + s.number + '</div>' +
+          '<div style="font-size:13.5px;font-weight:800;color:var(--color-text,#1C3E2C);margin-bottom:2px;">' + escapeHtml(s.name) + '</div>' +
+          '<div style="font-size:11px;color:var(--color-text-dim,#84968B);font-weight:600;">Semester ' + s.number + '</div>' +
         '</div>' +
       '</button>';
     }).join("");
@@ -380,9 +442,6 @@ async function showDeptSemPicker(currentDeptId, currentSemId) {
   if (currentDeptId) loadSemesters(currentDeptId);
 }
 
-// ═══════════════════════════════════════════
-// MAIN RENDER
-// ═══════════════════════════════════════════
 export async function renderHome(container, params, routeToken) {
   var stillActive = function () { return routeToken === undefined || isRouteActive(routeToken); };
 
@@ -499,7 +558,6 @@ export async function renderHome(container, params, routeToken) {
 
   var latestNotices = notices.slice(0, 2);
 
-  // ── SERVER-FIRST: recent subjects come from Supabase when available ──
   var storedRecent = getRecentSubjects();
   var serverRecent = [];
   try {
@@ -522,9 +580,6 @@ export async function renderHome(container, params, routeToken) {
     .filter(Boolean)
     .slice(0, 5);
 
-  // ── SERVER-DRIVEN: Continue Learning ──
-  // Prefer most recent subject that still exists on server.
-  // If none, fall back to first subject from server.
   var continueSubject = null;
   if (recentSubjects.length > 0) {
     continueSubject = subjects.filter(function (s) { return s.id === recentSubjects[0].id; })[0] || null;
@@ -535,10 +590,8 @@ export async function renderHome(container, params, routeToken) {
 
   var recentActivity = getRecentActivity().slice(0, 3);
 
-  var tipIndex = new Date().getDay() % TIPS.length;
-  var todaysTip = TIPS[tipIndex];
-  var quoteIndex = new Date().getDate() % QUOTES.length;
-  var todaysQuote = QUOTES[quoteIndex];
+  var todaysTip = randomItem(TIPS);
+  var todaysQuote = randomItem(QUOTES);
 
   var milestone = checkMilestone(streak.current);
   var seenMilestone = getSeenMilestone();
@@ -548,7 +601,7 @@ export async function renderHome(container, params, routeToken) {
 
   var html = [];
 
-  // ── HERO ──
+  // HERO
   html.push(
     '<div style="position:relative;border-radius:24px;padding:22px 20px 20px;margin-bottom:22px;overflow:hidden;background:linear-gradient(135deg,#142E1F 0%,#1F4A32 50%,#2A5540 100%);box-shadow:0 16px 40px -12px rgba(28,62,44,0.45);">',
       '<div style="position:absolute;top:-60px;right:-60px;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(200,122,30,0.25) 0%,transparent 70%);"></div>',
@@ -588,55 +641,55 @@ export async function renderHome(container, params, routeToken) {
     '</div>'
   );
 
-  // ── STATS ──
+  // STATS
   html.push(
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:24px;">',
-      statCard(E.books, subjects.length, T.subjects, "#DCFCE7", "#065F46"),
-      statCard(E.fire, streak.current, T.streak, "#FEF3C7", "#92400E"),
-      statCard(E.target, goalPercent + "%", T.goalLabel, "#DBEAFE", "#1E40AF"),
+      statCard(E.books, subjects.length, T.subjects, "rgba(16,185,129,0.15)", "#10B981"),
+      statCard(E.fire, streak.current, T.streak, "rgba(245,158,11,0.15)", "#F59E0B"),
+      statCard(E.target, goalPercent + "%", T.goalLabel, "rgba(59,130,246,0.15)", "#3B82F6"),
     '</div>'
   );
 
-  // ── WEEKLY CHART ──
+  // WEEKLY CHART
   var maxMin = 1;
   weeklyData.forEach(function (d) { if (d.minutes > maxMin) maxMin = d.minutes; });
 
   html.push(
-    '<div style="padding:16px;background:#FFFFFF;border:1px solid #E1E8E1;border-radius:18px;box-shadow:0 3px 12px rgba(28,62,44,0.05);margin-bottom:24px;">',
+    '<div style="padding:16px;background:var(--color-surface,#FFFFFF);border:1px solid var(--color-border,#E1E8E1);border-radius:18px;box-shadow:0 3px 12px rgba(28,62,44,0.05);margin-bottom:24px;">',
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">',
-        '<h3 style="font-size:13px;font-weight:800;color:#1C3E2C;margin:0;">' + E.chart + ' ' + T.weekly + '</h3>',
+        '<h3 style="font-size:13px;font-weight:800;color:var(--color-text,#1C3E2C);margin:0;">' + E.chart + ' ' + T.weekly + '</h3>',
         '<span style="font-size:11px;font-weight:800;color:#10B981;">' + goal.minutes + ' ' + T.minutes + ' ' + T.today + '</span>',
       '</div>',
       '<div style="display:flex;justify-content:space-between;align-items:flex-end;height:80px;gap:6px;">',
         weeklyData.map(function (d, i) {
           var height = Math.max(8, Math.round((d.minutes / maxMin) * 70));
           var isToday = i === weeklyData.length - 1;
-          var barColor = isToday ? "linear-gradient(180deg,#10B981,#059669)" : (d.minutes > 0 ? "linear-gradient(180deg,#A7F3D0,#6EE7B7)" : "#F1F5F1");
+          var barColor = isToday ? "linear-gradient(180deg,#10B981,#059669)" : (d.minutes > 0 ? "linear-gradient(180deg,#A7F3D0,#6EE7B7)" : "var(--color-border-subtle,#F1F5F1)");
           return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;">' +
             '<div style="flex:1;display:flex;align-items:flex-end;width:100%;">' +
               '<div style="width:100%;height:' + height + '%;background:' + barColor + ';border-radius:6px 6px 3px 3px;"></div>' +
             '</div>' +
-            '<span style="font-size:10px;font-weight:800;color:' + (isToday ? "#059669" : "#84968B") + ';">' + WEEKDAYS[d.weekday] + '</span>' +
+            '<span style="font-size:10px;font-weight:800;color:' + (isToday ? "#059669" : "var(--color-text-dim,#84968B)") + ';">' + WEEKDAYS[d.weekday] + '</span>' +
           '</div>';
         }).join(""),
       '</div>',
     '</div>'
   );
 
-  // ── RECENT SUBJECTS (server-driven) ──
+  // RECENT SUBJECTS
   if (recentSubjects.length > 0) {
     html.push(
       '<div style="display:flex;justify-content:space-between;align-items:center;margin:0 4px 12px;">',
-        '<h2 style="font-size:15px;font-weight:800;color:#1C3E2C;margin:0;">' + E.clock + ' ' + T.recent + '</h2>',
+        '<h2 style="font-size:15px;font-weight:800;color:var(--color-text,#1C3E2C);margin:0;">' + E.clock + ' ' + T.recent + '</h2>',
       '</div>',
       '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -16px 24px;padding:0 16px;">',
         '<div style="display:flex;gap:10px;width:max-content;padding-bottom:4px;">',
           recentSubjects.map(function (r) {
-            return '<button class="recent-subject" data-subject-id="' + r.id + '" style="display:flex;flex-direction:column;gap:10px;padding:14px;background:#FFFFFF;border:1.5px solid #E1E8E1;border-radius:16px;cursor:pointer;font-family:inherit;text-align:left;width:140px;flex-shrink:0;box-shadow:0 2px 8px rgba(28,62,44,0.04);">' +
+            return '<button class="recent-subject" data-subject-id="' + r.id + '" style="display:flex;flex-direction:column;gap:10px;padding:14px;background:var(--color-surface,#FFFFFF);border:1.5px solid var(--color-border,#E1E8E1);border-radius:16px;cursor:pointer;font-family:inherit;text-align:left;width:140px;flex-shrink:0;box-shadow:0 2px 8px rgba(28,62,44,0.04);">' +
               '<div style="width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,#DCFCE7,#BBF7D0);display:flex;align-items:center;justify-content:center;font-size:22px;">' + (r.icon || E.book) + '</div>' +
               '<div style="min-width:0;width:100%;">' +
-                '<div style="font-size:12.5px;font-weight:800;color:#1C3E2C;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:3px;">' + escapeHtml(r.name || "") + '</div>' +
-                '<div style="font-size:10.5px;color:#84968B;font-weight:700;">' + escapeHtml(r.code || "") + '</div>' +
+                '<div style="font-size:12.5px;font-weight:800;color:var(--color-text,#1C3E2C);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:3px;">' + escapeHtml(r.name || "") + '</div>' +
+                '<div style="font-size:10.5px;color:var(--color-text-dim,#84968B);font-weight:700;">' + escapeHtml(r.code || "") + '</div>' +
               '</div>' +
             '</button>';
           }).join(""),
@@ -645,65 +698,65 @@ export async function renderHome(container, params, routeToken) {
     );
   }
 
-  // ── CONTINUE LEARNING (server-driven) ──
+  // CONTINUE LEARNING
   if (continueSubject) {
     html.push(
       '<div style="display:flex;justify-content:space-between;align-items:center;margin:0 4px 12px;">',
-        '<h2 style="font-size:15px;font-weight:800;color:#1C3E2C;margin:0;">' + T.continue + '</h2>',
+        '<h2 style="font-size:15px;font-weight:800;color:var(--color-text,#1C3E2C);margin:0;">' + T.continue + '</h2>',
       '</div>',
-      '<button class="continue-card" data-subject-id="' + continueSubject.id + '" style="width:100%;display:flex;align-items:center;gap:14px;padding:16px;background:linear-gradient(135deg,#FFFFFF,#F8FBF8);border:1.5px solid #E1E8E1;border-radius:18px;cursor:pointer;font-family:inherit;text-align:left;box-shadow:0 4px 14px rgba(28,62,44,0.06);margin-bottom:24px;position:relative;overflow:hidden;">',
+      '<button class="continue-card" data-subject-id="' + continueSubject.id + '" style="width:100%;display:flex;align-items:center;gap:14px;padding:16px;background:var(--color-surface,#FFFFFF);border:1.5px solid var(--color-border,#E1E8E1);border-radius:18px;cursor:pointer;font-family:inherit;text-align:left;box-shadow:0 4px 14px rgba(28,62,44,0.06);margin-bottom:24px;position:relative;overflow:hidden;">',
         '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#10B981,#3B82F6,#8B5CF6);"></div>',
         '<div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#DCFCE7,#BBF7D0);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;">' + (continueSubject.icon || E.book) + '</div>',
         '<div style="flex:1;min-width:0;">',
-          '<div style="font-size:10px;font-weight:800;color:#84968B;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px;">' + E.book + ' PICK UP WHERE YOU LEFT</div>' +
-          '<div style="font-size:15px;font-weight:800;color:#1C3E2C;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(continueSubject.name) + '</div>' +
-          '<div style="font-size:11.5px;color:#84968B;font-weight:600;">' + escapeHtml(continueSubject.code || "") + (continueSubject.credits ? ' \u2022 ' + continueSubject.credits + ' credits' : '') + '</div>',
+          '<div style="font-size:10px;font-weight:800;color:var(--color-text-dim,#84968B);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px;">' + E.book + ' PICK UP WHERE YOU LEFT</div>' +
+          '<div style="font-size:15px;font-weight:800;color:var(--color-text,#1C3E2C);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(continueSubject.name) + '</div>' +
+          '<div style="font-size:11.5px;color:var(--color-text-dim,#84968B);font-weight:600;">' + escapeHtml(continueSubject.code || "") + (continueSubject.credits ? ' \u2022 ' + continueSubject.credits + ' credits' : '') + '</div>',
         '</div>',
         '<div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#10B981,#059669);color:#FFFFFF;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;">' + E.play + '</div>',
       '</button>'
     );
   }
 
-  // ── QUICK ACTIONS (all unlocked) ──
+  // QUICK ACTIONS
   html.push(
     '<div style="display:flex;justify-content:space-between;align-items:center;margin:0 4px 12px;">',
-      '<h2 style="font-size:15px;font-weight:800;color:#1C3E2C;margin:0;">' + T.quickAct + '</h2>',
-      '<button id="home-all-subjects" style="font-size:11.5px;font-weight:800;color:#1C3E2C;background:transparent;border:none;font-family:inherit;cursor:pointer;padding:0;">' + T.seeAll + ' &rarr;</button>',
+      '<h2 style="font-size:15px;font-weight:800;color:var(--color-text,#1C3E2C);margin:0;">' + T.quickAct + '</h2>',
+      '<button id="home-all-subjects" style="font-size:11.5px;font-weight:800;color:var(--color-text,#1C3E2C);background:transparent;border:none;font-family:inherit;cursor:pointer;padding:0;">' + T.seeAll + ' &rarr;</button>',
     '</div>',
     '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px;">',
-      quickBtn(E.books,  "Study",   "#DCFCE7", "#065F46", "#/subjects"),
-      quickBtn(E.target, "Quiz",    "#FEF3C7", "#92400E", "#/quiz"),
-      quickBtn(E.note,   "Notes",   "#DBEAFE", "#1E40AF", "#/notes"),
-      quickBtn(E.star,   "Saved",   "#FFE4E6", "#9F1239", "#/bookmarks"),
-      quickBtn(E.pdf,    "PDFs",    "#E0E7FF", "#3730A3", "#/pdfs"),
-      quickBtn(E.calc,   "Formula", "#CFFAFE", "#155E75", "#/formulas"),
-      quickBtn(E.cal,    "Planner", "#F3E8FF", "#6B21A8", "#/planner"),
-      quickBtn(E.robot,  "AI",      "#FCE7F3", "#9D174D", "#/ai-chat"),
+      quickBtn(E.books,  "Study",   "rgba(16,185,129,0.15)", "#10B981", "#/subjects"),
+      quickBtn(E.target, "Quiz",    "rgba(245,158,11,0.15)", "#F59E0B", "#/quiz"),
+      quickBtn(E.note,   "Notes",   "rgba(59,130,246,0.15)", "#3B82F6", "#/notes"),
+      quickBtn(E.star,   "Saved",   "rgba(244,63,94,0.15)",  "#F43F5E", "#/bookmarks"),
+      quickBtn(E.pdf,    "PDFs",    "rgba(99,102,241,0.15)", "#6366F1", "#/pdfs"),
+      quickBtn(E.calc,   "Formula", "rgba(6,182,212,0.15)",  "#06B6D4", "#/formulas"),
+      quickBtn(E.cal,    "Planner", "rgba(168,85,247,0.15)", "#A855F7", "#/planner"),
+      quickBtn(E.robot,  "AI",      "rgba(236,72,153,0.15)", "#EC4899", "#/ai"),
     '</div>'
   );
 
-  // ── NOTICES ──
+  // NOTICES
   if (latestNotices.length > 0) {
     html.push(
       '<div style="display:flex;justify-content:space-between;align-items:center;margin:0 4px 12px;">',
-        '<h2 style="font-size:15px;font-weight:800;color:#1C3E2C;margin:0;">' + E.megaph + ' ' + T.notices + '</h2>',
-        '<button id="home-all-notices" style="font-size:11.5px;font-weight:800;color:#1C3E2C;background:transparent;border:none;font-family:inherit;cursor:pointer;padding:0;">' + T.seeAll + ' &rarr;</button>',
+        '<h2 style="font-size:15px;font-weight:800;color:var(--color-text,#1C3E2C);margin:0;">' + E.megaph + ' ' + T.notices + '</h2>',
+        '<button id="home-all-notices" style="font-size:11.5px;font-weight:800;color:var(--color-text,#1C3E2C);background:transparent;border:none;font-family:inherit;cursor:pointer;padding:0;">' + T.seeAll + ' &rarr;</button>',
       '</div>'
     );
     latestNotices.forEach(function (n, idx) {
       var dateText = formatDate(n.publishedAt || n.createdAt);
       var contentText = stripMarkdown(n.content || "").substring(0, 100);
       html.push(
-        '<div class="home-notice-card" data-notice-idx="' + idx + '" style="padding:14px 16px;background:linear-gradient(135deg,#FFFBEB,#FEF3C7);border:1.5px solid #FCD34D;border-radius:16px;box-shadow:0 3px 12px rgba(200,122,30,0.08);margin-bottom:10px;cursor:pointer;position:relative;overflow:hidden;">',
+        '<div class="home-notice-card" data-notice-idx="' + idx + '" style="padding:14px 16px;background:rgba(245,158,11,0.08);border:1.5px solid rgba(245,158,11,0.4);border-radius:16px;box-shadow:0 3px 12px rgba(200,122,30,0.08);margin-bottom:10px;cursor:pointer;position:relative;overflow:hidden;">',
           '<div style="position:absolute;top:0;left:0;width:4px;height:100%;background:linear-gradient(180deg,#F59E0B,#D97706);"></div>',
           '<div style="padding-left:8px;">',
             '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">',
-              '<span style="font-size:9.5px;font-weight:800;color:#92400E;background:rgba(255,255,255,0.7);padding:3px 9px;border-radius:6px;text-transform:uppercase;letter-spacing:0.5px;">' + escapeHtml(n.audience || "Notice") + '</span>',
-              '<span style="font-size:10.5px;color:#92400E;font-weight:600;">' + dateText + '</span>',
+              '<span style="font-size:9.5px;font-weight:800;color:#F59E0B;background:rgba(245,158,11,0.15);padding:3px 9px;border-radius:6px;text-transform:uppercase;letter-spacing:0.5px;">' + escapeHtml(n.audience || "Notice") + '</span>',
+              '<span style="font-size:10.5px;color:var(--color-text-muted,#92400E);font-weight:600;">' + dateText + '</span>',
             '</div>',
-            '<h3 style="font-size:13.5px;font-weight:800;color:#78350F;margin:0 0 5px;line-height:1.3;">' + escapeHtml(n.title || "") + '</h3>',
-            '<p style="font-size:11.5px;color:#92400E;line-height:1.5;margin:0 0 8px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">' + escapeHtml(contentText) + '</p>',
-            '<div style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:800;color:#78350F;">' + T.readMore + ' &rarr;</div>',
+            '<h3 style="font-size:13.5px;font-weight:800;color:var(--color-text,#78350F);margin:0 0 5px;line-height:1.3;">' + escapeHtml(n.title || "") + '</h3>',
+            '<p style="font-size:11.5px;color:var(--color-text-muted,#92400E);line-height:1.5;margin:0 0 8px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">' + escapeHtml(contentText) + '</p>',
+            '<div style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:800;color:#F59E0B;">' + T.readMore + ' &rarr;</div>',
           '</div>',
         '</div>'
       );
@@ -711,24 +764,24 @@ export async function renderHome(container, params, routeToken) {
     html.push('<div style="height:6px;"></div>');
   }
 
-  // ── QUOTE ──
+  // QUOTE
   html.push(
-    '<div style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;background:linear-gradient(135deg,#F5F3FF,#EDE9FE);border:1.5px solid #DDD6FE;border-radius:16px;margin-bottom:12px;">',
-      '<div style="width:36px;height:36px;border-radius:12px;background:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">' + E.quote + '</div>',
+    '<div style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;background:rgba(168,85,247,0.10);border:1.5px solid rgba(168,85,247,0.3);border-radius:16px;margin-bottom:12px;">',
+      '<div style="width:36px;height:36px;border-radius:12px;background:rgba(168,85,247,0.2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">' + E.quote + '</div>',
       '<div style="flex:1;min-width:0;">',
-        '<div style="font-size:10px;font-weight:800;color:#6D28D9;letter-spacing:0.6px;text-transform:uppercase;margin-bottom:3px;">' + T.quote + '</div>',
-        '<div style="font-size:12.5px;color:#4C1D95;line-height:1.4;font-weight:600;font-style:italic;">' + escapeHtml(todaysQuote) + '</div>',
+        '<div style="font-size:10px;font-weight:800;color:#A855F7;letter-spacing:0.6px;text-transform:uppercase;margin-bottom:3px;">' + T.quote + '</div>',
+        '<div id="ds-quote-text" style="font-size:13px;color:var(--color-text,#4C1D95);line-height:1.55;font-weight:600;font-style:italic;transition:opacity 0.3s ease;">' + escapeHtml(todaysQuote) + '</div>',
       '</div>',
     '</div>'
   );
 
-  // ── TIP ──
+  // TIP
   html.push(
-    '<div style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;background:linear-gradient(135deg,#EFF6FF,#DBEAFE);border:1.5px solid #BFDBFE;border-radius:16px;margin-bottom:20px;">',
-      '<div style="width:36px;height:36px;border-radius:12px;background:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">' + E.bulb + '</div>',
+    '<div style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;background:rgba(59,130,246,0.10);border:1.5px solid rgba(59,130,246,0.3);border-radius:16px;margin-bottom:20px;">',
+      '<div style="width:36px;height:36px;border-radius:12px;background:rgba(59,130,246,0.2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">' + E.bulb + '</div>',
       '<div style="flex:1;min-width:0;">',
-        '<div style="font-size:10px;font-weight:800;color:#1E40AF;letter-spacing:0.6px;text-transform:uppercase;margin-bottom:3px;">' + T.tip + '</div>',
-        '<div style="font-size:12.5px;color:#1E3A8A;line-height:1.4;font-weight:600;">' + escapeHtml(todaysTip) + '</div>',
+        '<div style="font-size:10px;font-weight:800;color:#3B82F6;letter-spacing:0.6px;text-transform:uppercase;margin-bottom:3px;">' + T.tip + '</div>',
+        '<div id="ds-tip-text" style="font-size:13px;color:var(--color-text,#1E3A8A);line-height:1.55;font-weight:600;transition:opacity 0.3s ease;">' + escapeHtml(todaysTip) + '</div>',
       '</div>',
     '</div>'
   );
@@ -737,7 +790,20 @@ export async function renderHome(container, params, routeToken) {
 
   main.innerHTML = html.join("");
 
-  // ── BIND EVENTS ──
+  var _rotateTimer = setInterval(function () {
+    var quoteEl = main.querySelector("#ds-quote-text");
+    var tipEl = main.querySelector("#ds-tip-text");
+    if (!quoteEl || !tipEl) return;
+    quoteEl.style.opacity = "0";
+    tipEl.style.opacity = "0";
+    setTimeout(function () {
+      quoteEl.textContent = randomItem(QUOTES);
+      tipEl.textContent = randomItem(TIPS);
+      quoteEl.style.opacity = "1";
+      tipEl.style.opacity = "1";
+    }, 300);
+  }, 45000);
+
   var openPicker = function () { showDeptSemPicker(currentDept.id, currentSem ? currentSem.id : null); };
   main.querySelector("#hero-dept-btn") && main.querySelector("#hero-dept-btn").addEventListener("click", openPicker);
   main.querySelector("#hero-sem-btn") && main.querySelector("#hero-sem-btn").addEventListener("click", openPicker);
@@ -754,11 +820,8 @@ export async function renderHome(container, params, routeToken) {
       e.preventDefault();
       var route = btn.getAttribute("data-route");
       var label = btn.getAttribute("data-quick");
-      if (!route) {
-        showInlineModal(label, "This feature is coming soon.");
-      } else {
-        window.location.hash = route;
-      }
+      if (!route) { showInlineModal(label, "This feature is coming soon."); }
+      else { window.location.hash = route; }
     });
   });
 
@@ -813,27 +876,24 @@ export async function renderHome(container, params, routeToken) {
   });
 
   currentCleanup = function () {
+    try { if (_rotateTimer) clearInterval(_rotateTimer); } catch (e) {}
     try { cleanupPull && cleanupPull(); } catch (e) {}
     try { cleanupConn && cleanupConn(); } catch (e) {}
   };
 }
 
-// ═══════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════
 function statCard(icon, value, label, bg, color) {
-  return '<div style="padding:14px 10px;background:#FFFFFF;border:1px solid #E1E8E1;border-radius:16px;text-align:center;box-shadow:0 2px 8px rgba(28,62,44,0.04);">' +
+  return '<div style="padding:14px 10px;background:var(--color-surface,#FFFFFF);border:1px solid var(--color-border,#E1E8E1);border-radius:16px;text-align:center;box-shadow:0 2px 8px rgba(28,62,44,0.04);">' +
     '<div style="width:34px;height:34px;border-radius:11px;background:' + bg + ';color:' + color + ';display:flex;align-items:center;justify-content:center;font-size:15px;margin:0 auto 8px;">' + icon + '</div>' +
-    '<div style="font-size:17px;font-weight:900;color:#1C3E2C;letter-spacing:-0.3px;line-height:1;">' + value + '</div>' +
-    '<div style="font-size:10px;font-weight:700;color:#84968B;text-transform:uppercase;letter-spacing:0.5px;margin-top:4px;">' + label + '</div>' +
+    '<div style="font-size:17px;font-weight:900;color:var(--color-text,#1C3E2C);letter-spacing:-0.3px;line-height:1;">' + value + '</div>' +
+    '<div style="font-size:10px;font-weight:700;color:var(--color-text-dim,#84968B);text-transform:uppercase;letter-spacing:0.5px;margin-top:4px;">' + label + '</div>' +
   '</div>';
 }
 
-// No lock icon anymore — all unlocked
 function quickBtn(icon, label, bg, color, route) {
-  return '<button data-quick="' + label + '" data-route="' + (route || "") + '" style="position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 4px 10px;background:#FFFFFF;border:1px solid #E1E8E1;border-radius:16px;cursor:pointer;font-family:inherit;box-shadow:0 2px 6px rgba(28,62,44,0.04);">' +
+  return '<button data-quick="' + label + '" data-route="' + (route || "") + '" style="position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 4px 10px;background:var(--color-surface,#FFFFFF);border:1px solid var(--color-border,#E1E8E1);border-radius:16px;cursor:pointer;font-family:inherit;box-shadow:0 2px 6px rgba(28,62,44,0.04);">' +
     '<div style="width:42px;height:42px;border-radius:13px;background:' + bg + ';color:' + color + ';display:flex;align-items:center;justify-content:center;font-size:20px;">' + icon + '</div>' +
-    '<span style="font-size:10.5px;font-weight:800;color:#1C3E2C;">' + label + '</span>' +
+    '<span style="font-size:10.5px;font-weight:800;color:var(--color-text,#1C3E2C);">' + label + '</span>' +
   '</button>';
 }
 
