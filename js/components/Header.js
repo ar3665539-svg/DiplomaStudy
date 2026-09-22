@@ -1,5 +1,6 @@
 /**
  * Header - Modern glass header with theme toggle
+ * DS brand logo colors match Home theme (Sunrise Gold / Aurora Emerald)
  */
 
 import { router } from "../core/router.js";
@@ -11,13 +12,47 @@ function getCurrentTheme() {
   catch (e) { return "light"; }
 }
 
+// ═══════════════════════════════════════════
+// BRAND LOGO THEME STYLES
+// Light = Sunrise Gold, Dark = Aurora Emerald
+// ═══════════════════════════════════════════
+function injectBrandStyles() {
+  if (document.getElementById("ds-header-brand-v2")) return;
+  var st = document.createElement("style");
+  st.id = "ds-header-brand-v2";
+  st.textContent = [
+    // ☀️ Light mode — Sunrise Gold
+    ".header-brand-logo {",
+    "  background: linear-gradient(135deg, #78350F 0%, #B45309 50%, #D97706 100%) !important;",
+    "  color: #FFFFFF !important;",
+    "  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.35) !important;",
+    "  transition: background 0.25s ease, box-shadow 0.25s ease;",
+    "}",
+    ".header-brand-name {",
+    "  color: #422006 !important;",
+    "  transition: color 0.25s ease;",
+    "}",
+
+    // 🌙 Dark mode — Aurora Emerald
+    "[data-theme='dark'] .header-brand-logo {",
+    "  background: linear-gradient(135deg, #022C22 0%, #065F46 50%, #10B981 100%) !important;",
+    "  color: #FFFFFF !important;",
+    "  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4) !important;",
+    "}",
+    "[data-theme='dark'] .header-brand-name {",
+    "  color: #ECFDF5 !important;",
+    "}"
+  ].join("\n");
+  document.head.appendChild(st);
+}
+
 function applyTheme(theme) {
   const root = document.documentElement;
   if (theme === "dark") root.setAttribute("data-theme", "dark");
   else root.removeAttribute("data-theme");
 
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", theme === "dark" ? "#101712" : "#1C3E2C");
+  if (meta) meta.setAttribute("content", theme === "dark" ? "#040A08" : "#FDFAF4");
 
   const toggleIcon = document.getElementById("theme-icon-svg");
   if (toggleIcon) {
@@ -54,6 +89,8 @@ function navigateTo(hash) {
 
 export const Header = {
   render(options = {}) {
+    injectBrandStyles();
+
     const { title = "", subtitle = "", showBack = false, showSearch = false, showSettings = true, showTheme = true, centerTitle = true } = options;
     applyTheme(getCurrentTheme());
 
@@ -155,4 +192,5 @@ export const Header = {
   }
 };
 
+injectBrandStyles();
 applyTheme(getCurrentTheme());
